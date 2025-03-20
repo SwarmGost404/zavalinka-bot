@@ -1,9 +1,7 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-
-# Настройки подключения к PostgreSQL# Настройки подключения к PostgreSQL
-DATABASE_URL = "postgresql+psycopg2://song_user:Redfgt543@localhost:5432/songs_db"
+from env import DATABASE_URL
 
 # Создаем движок SQLAlchemy
 engine = create_engine(DATABASE_URL)
