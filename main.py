@@ -4,9 +4,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
 from typing import Optional
-
-# Настройки подключения к PostgreSQL (замените на свои)
-DATABASE_URL = "postgresql+psycopg2://song_user:ваш_пароль@localhost:5432/songs_db"
+from env import DATABASE_URL
 
 # Создаем движок SQLAlchemy
 engine = create_engine(DATABASE_URL)
