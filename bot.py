@@ -5,7 +5,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from database import init_db, get_db, add_song, get_all_songs, get_songs_by_region, search_by_title, search_by_text
 
 # Токен вашего бота
-API_TOKEN = "ВАШ_ТОКЕН_БОТА"
+API_TOKEN = "7656851825:AAGndOhQDw3oYve4J12QoCLmMuLuhY69J6o"
 
 # Папка для хранения аудиофайлов
 AUDIO_FOLDER = "audio_files"
