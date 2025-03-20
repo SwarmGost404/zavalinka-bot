@@ -194,7 +194,13 @@ async def handle_audio(update: Update, context: CallbackContext) -> None:
 
         # Добавляем песню в базу данных
         db = next(get_db())
-        add_song(db, title=context.user_data['title'], region=context.user_data['region'], audio_file=file_path)
+        add_song(
+            db,
+            title=context.user_data['title'],
+            region=context.user_data['region'],
+            audio_file=file_path,
+            text=context.user_data.get('text')  # Сохраняем текст, если он есть
+        )
         await update.message.reply_text('Песня успешно добавлена!')
         # Очищаем состояние
         context.user_data.clear()
