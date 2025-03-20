@@ -1,14 +1,8 @@
 import logging
-import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 from database import init_db, get_db, add_song, get_all_songs, get_songs_by_region, search_by_title, search_by_text
 from env import API_TOKEN
-
-# Папка для хранения аудиофайлов
-AUDIO_FOLDER = "audio_files"
-if not os.path.exists(AUDIO_FOLDER):
-    os.makedirs(AUDIO_FOLDER)
 
 # Настройка логирования
 logging.basicConfig(
@@ -23,7 +17,7 @@ init_db()
 # Обработчик команды /start
 async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
-        'Привет! Я бот для хранения текстов и аудиозаписей песен. Используй команды:\n'
+        'Привет! Я бот для хранения текстов песен. Используй команды:\n'
         '/add - добавить песню\n'
         '/search_title - найти по названию\n'
         '/search_text - найти по тексту\n'
@@ -56,11 +50,11 @@ async def list_songs(update: Update, context: CallbackContext) -> None:
             songs_list = "\n".join([result.title for result in results])
             await update.message.reply_text(
                 f"Список песен:\n{songs_list}\n\n"
-                "Отправьте название песни, чтобы увидеть её текст или аудиозапись."
+                "Отправьте название песни, чтобы увидеть её текст."
             )
             # Сохраняем список песен в контексте
             context.user_data['songs_list'] = {
-                result.title: (result.text, result.audio_file, result.region)
+                result.title: (result.text, result.region)
                 for result in results
             }
         else:
@@ -80,13 +74,11 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
 
     # Если пользователь выбирает песню из списка
     if 'songs_list' in context.user_data and user_input in context.user_data['songs_list']:
-        text, audio_file, region = context.user_data['songs_list'][user_input]
-        if audio_file:
-            await update.message.reply_audio(audio=open(audio_file, 'rb'))
-        elif text:
+        text, region = context.user_data['songs_list'][user_input]
+        if text:
             await update.message.reply_text(f"Текст песни '{user_input}' (Область: {region}):\n{text}")
         else:
-            await update.message.reply_text(f"Песня '{user_input}' не содержит текста или аудиозаписи.")
+            await update.message.reply_text(f"Песня '{user_input}' не содержит текста.")
         context.user_data.pop('songs_list')  # Очищаем список песен
         return
 
@@ -104,10 +96,13 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         elif context.user_data['awaiting_input'] == 'awaiting_region':
             # Сохраняем область
             context.user_data['region'] = user_input
-            await update.message.reply_text(
-                'Отправьте текст песни или аудиозапись (голосовое сообщение или файл):'
-            )
-            context.user_data['awaiting_input'] = 'awaiting_content'
+            await update.message.reply_text('Отправьте текст песни:')
+            context.user_data['awaiting_input'] = 'awaiting_text'
+
+        elif context.user_data['awaiting_input'] == 'awaiting_text':
+            # Сохраняем текст песни
+            context.user_data['text'] = user_input
+            await save_song(update, context)  # Функция для сохранения песни
 
         elif context.user_data['awaiting_input'] == 'search_title':
             # Поиск по названию
@@ -115,14 +110,12 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
             results = search_by_title(db, user_input)
             if results:
                 for result in results:
-                    if result.audio_file:
-                        await update.message.reply_audio(audio=open(result.audio_file, 'rb'))
-                    elif result.text:
+                    if result.text:
                         await update.message.reply_text(
                             f"Название: {result.title}\nТекст: {result.text}\nОбласть: {result.region}"
                         )
                     else:
-                        await update.message.reply_text(f"Песня '{result.title}' не содержит текста или аудиозаписи.")
+                        await update.message.reply_text(f"Песня '{result.title}' не содержит текста.")
             else:
                 await update.message.reply_text('Ничего не найдено.')
             context.user_data['awaiting_input'] = None
@@ -133,14 +126,12 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
             results = search_by_text(db, user_input)
             if results:
                 for result in results:
-                    if result.audio_file:
-                        await update.message.reply_audio(audio=open(result.audio_file, 'rb'))
-                    elif result.text:
+                    if result.text:
                         await update.message.reply_text(
                             f"Название: {result.title}\nТекст: {result.text}\nОбласть: {result.region}"
                         )
                     else:
-                        await update.message.reply_text(f"Песня '{result.title}' не содержит текста или аудиозаписи.")
+                        await update.message.reply_text(f"Песня '{result.title}' не содержит текста.")
             else:
                 await update.message.reply_text('Ничего не найдено.')
             context.user_data['awaiting_input'] = None
@@ -154,11 +145,11 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                 songs_list = "\n".join([result.title for result in results])
                 await update.message.reply_text(
                     f"Список песен в области '{user_input}':\n{songs_list}\n\n"
-                    "Отправьте название песни, чтобы увидеть её текст или аудиозапись."
+                    "Отправьте название песни, чтобы увидеть её текст."
                 )
                 # Сохраняем список песен в контексте
                 context.user_data['songs_list'] = {
-                    result.title: (result.text, result.audio_file, result.region)
+                    result.title: (result.text, result.region)
                     for result in results
                 }
             else:
@@ -172,43 +163,22 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
         context.user_data.clear()  # Очищаем состояние в случае ошибки
 
-# Обработчик голосовых сообщений и аудиофайлов
-async def handle_audio(update: Update, context: CallbackContext) -> None:
-    if 'awaiting_input' not in context.user_data or context.user_data['awaiting_input'] != 'awaiting_content':
-        await update.message.reply_text("Используйте команды для взаимодействия с ботом.")
-        return
-
+# Функция для сохранения песни
+async def save_song(update: Update, context: CallbackContext) -> None:
+    db = next(get_db())
     try:
-        # Получаем аудиофайл
-        if update.message.voice:
-            audio_file = await update.message.voice.get_file()
-        elif update.message.audio:
-            audio_file = await update.message.audio.get_file()
-        else:
-            await update.message.reply_text("Пожалуйста, отправьте голосовое сообщение или аудиофайл.")
-            return
-
-        # Сохраняем аудиофайл на сервере
-        file_path = os.path.join(AUDIO_FOLDER, f"{context.user_data['title']}.mp3")
-        await audio_file.download_to_drive(file_path)
-
-        # Добавляем песню в базу данных
-        db = next(get_db())
-        add_song(
+        song = add_song(
             db,
             title=context.user_data['title'],
             region=context.user_data['region'],
-            audio_file=file_path,
-            text=context.user_data.get('text')  # Сохраняем текст, если он есть
+            text=context.user_data.get('text')
         )
         await update.message.reply_text('Песня успешно добавлена!')
-        # Очищаем состояние
-        context.user_data.clear()
-
+        context.user_data.clear()  # Очищаем состояние
     except Exception as e:
-        logger.error(f"Ошибка при обработке аудио: {e}", exc_info=True)
+        logger.error(f"Ошибка при сохранении песни: {e}")
         await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
-        context.user_data.clear()  # Очищаем состояние в случае ошибки
+        context.user_data.clear()
 
 # Основная функция
 def main():
@@ -223,9 +193,8 @@ def main():
     application.add_handler(CommandHandler("list", list_songs))
     application.add_handler(CommandHandler("list_by_region", list_by_region))
 
-    # Регистрация обработчиков текстовых сообщений и аудио
+    # Регистрация обработчиков текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_audio))
 
     # Запуск бота
     application.run_polling()

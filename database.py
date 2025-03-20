@@ -35,7 +35,6 @@ class Song(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     text = Column(Text)  # Текст песни (опционально)
-    audio_file = Column(String)  # Путь к аудиофайлу (опционально)
     region = Column(String, nullable=False)
 
 # Создаем таблицы в базе данных (если их нет)
@@ -56,14 +55,14 @@ def get_db():
         db.close()
 
 # Функция для добавления песни
-def add_song(db, title: str, region: str, text: str = None, audio_file: str = None):
+def add_song(db, title: str, region: str, text: str = None):
     try:
         # Проверяем, что title и region не пустые
         if not title or not region:
             raise ValueError("Название и область не могут быть пустыми")
 
         # Создаем объект песни
-        song = Song(title=title, text=text, audio_file=audio_file, region=region)
+        song = Song(title=title, text=text, region=region)
         db.add(song)
         db.commit()
         db.refresh(song)
