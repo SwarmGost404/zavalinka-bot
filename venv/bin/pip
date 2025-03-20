@@ -1,4 +1,4 @@
-#!/home/swarmghost/project/zavalenka-bot/venv/bin/python3
+#!/home/swarmghost/project/zavalinka-bot/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
