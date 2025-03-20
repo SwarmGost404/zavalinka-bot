@@ -8,8 +8,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Получаем DATABASE_URL из переменных окружения
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://gen_user:cP%3DSUSZ%5C1fHOsT@2.59.40.244:5432/default_db")
+from env import DATABASE_URL
 
 # Создаем движок SQLAlchemy
 engine = create_engine(DATABASE_URL)
@@ -21,6 +20,7 @@ try:
     connection.close()
 except Exception as e:
     logger.error(f"Ошибка подключения к базе данных: {e}")
+    raise  # Прерываем выполнение, если подключение не удалось
 
 # Создаем базовый класс для моделей
 Base = declarative_base()
@@ -40,8 +40,12 @@ class Song(Base):
 
 # Создаем таблицы в базе данных (если их нет)
 def init_db():
-    Base.metadata.create_all(bind=engine)
-    logger.info("Таблицы созданы (если их не было)")
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Таблицы созданы (если их не было)")
+    except Exception as e:
+        logger.error(f"Ошибка при создании таблиц: {e}")
+        raise  # Прерываем выполнение, если таблицы не созданы
 
 # Функция для получения сессии
 def get_db():
@@ -53,28 +57,54 @@ def get_db():
 
 # Функция для добавления песни
 def add_song(db, title: str, region: str, text: str = None, audio_file: str = None):
-    song = Song(title=title, text=text, audio_file=audio_file, region=region)
-    db.add(song)
-    db.commit()
-    db.refresh(song)
-    logger.info(f"Добавлена песня: {song.title}")
-    return song
+    try:
+        # Проверяем, что title и region не пустые
+        if not title or not region:
+            raise ValueError("Название и область не могут быть пустыми")
+
+        # Создаем объект песни
+        song = Song(title=title, text=text, audio_file=audio_file, region=region)
+        db.add(song)
+        db.commit()
+        db.refresh(song)
+        logger.info(f"Добавлена песня: {song.title}")
+        return song
+    except Exception as e:
+        db.rollback()  # Откатываем транзакцию в случае ошибки
+        logger.error(f"Ошибка при добавлении песни: {e}")
+        raise  # Пробрасываем исключение дальше
 
 # Функция для получения всех песен
 def get_all_songs(db):
-    return db.query(Song).all()
+    try:
+        return db.query(Song).all()
+    except Exception as e:
+        logger.error(f"Ошибка при получении списка песен: {e}")
+        raise
 
 # Функция для поиска песен по области
 def get_songs_by_region(db, region: str):
-    return db.query(Song).filter(Song.region.ilike(f"%{region}%")).all()
+    try:
+        return db.query(Song).filter(Song.region.ilike(f"%{region}%")).all()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске песен по области: {e}")
+        raise
 
 # Функция для поиска песни по названию
 def search_by_title(db, title: str):
-    return db.query(Song).filter(Song.title.ilike(f"%{title}%")).all()
+    try:
+        return db.query(Song).filter(Song.title.ilike(f"%{title}%")).all()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске песни по названию: {e}")
+        raise
 
 # Функция для поиска песни по тексту
 def search_by_text(db, text: str):
-    return db.query(Song).filter(Song.text.ilike(f"%{text}%")).all()
+    try:
+        return db.query(Song).filter(Song.text.ilike(f"%{text}%")).all()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске песни по тексту: {e}")
+        raise
 
 # Инициализация базы данных
 if __name__ == "__main__":
