@@ -17,7 +17,8 @@ init_db()
 # Обработчик команды /start
 async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
-        'Привет! Я хранитель текстов этнографических песен \nИспользуй команды:\n'
+        'Привет! Я хранитель текстов этнографических песен \n'
+        'Используй команды:\n'
         '/add - добавить песню\n'
         '/search_title - найти по названию\n'
         '/search_text - найти по тексту\n'
