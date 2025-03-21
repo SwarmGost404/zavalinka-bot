@@ -17,10 +17,7 @@ init_db()
 # Обработчик команды /start
 async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
-        'Привет! Я хранитель текстов этнографических песен \n'
-        'Я (Создатель бота) хочу развивать удобство и получение народных песен (И вообще всей народной культуры) Я сделал этого бота на свои деньги и своими руками (Надеюсь вам понравится) Связь со мной @SwarmGost'
-        ' Сейчас я подробно расскажу про команды\n'
-        'Используй команды:\n'
+        'Привет! Я хранитель текстов этнографических песен \nИспользуй команды:\n'
         '/add - добавить песню\n'
         '/search_title - найти по названию\n'
         '/search_text - найти по тексту\n'
@@ -31,7 +28,10 @@ async def start(update: Update, context: CallbackContext) -> None:
 
 async def help(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
-        'Привет! Я хранитель текстов этнографических песен \nИспользуй команды:\n'
+        'Привет! Я хранитель текстов этнографических песен \n'
+        'Я (Создатель бота) хочу развивать удобство и получение народных песен (И вообще всей народной культуры) Я сделал этого бота на свои деньги и своими руками (Надеюсь вам понравится) Связь со мной @SwarmGost'
+        ' Сейчас я подробно расскажу про команды\n'
+        'Используй команды:\n'
         '/add - добавить песню\n'
         '/search_title - найти по названию\n'
         '/search_text - найти по тексту\n'
@@ -55,7 +55,7 @@ async def search_text(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text('Введите текст песни для поиска:')
     context.user_data['awaiting_input'] = 'search_text'
 
-# Обработчик команды /list
+# Обработчик команды /list области
 async def list_songs(update: Update, context: CallbackContext) -> None:
     db = next(get_db())
     try:
@@ -155,11 +155,11 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    f"Список песен в области '{user_input}':",
+                    f"Список песен в Категории '{user_input}':",
                     reply_markup=reply_markup
                 )
             else:
-                await update.message.reply_text(f"В области '{user_input}' нет песен.\n /start")
+                await update.message.reply_text(f"В Категории '{user_input}' нет песен.\n /start")
             context.user_data['awaiting_input'] = None
 
     except ValueError:
