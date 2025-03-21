@@ -1,16 +1,14 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
 import logging
+from env import DATABASE_URL  # Убедитесь, что DATABASE_URL указан в .env
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from env import DATABASE_URL
-
-# Создаем движок SQLAlchemy
+# Создаем движок SQLAlchemy для PostgreSQL
 engine = create_engine(DATABASE_URL)
 
 # Проверяем подключение к базе данных
@@ -103,6 +101,14 @@ def search_by_text(db, text: str):
         return db.query(Song).filter(Song.text.ilike(f"%{text}%")).all()
     except Exception as e:
         logger.error(f"Ошибка при поиске песни по тексту: {e}")
+        raise
+
+# Функция для поиска песни по ID
+def get_song_by_id(db, song_id: int):
+    try:
+        return db.query(Song).filter(Song.id == song_id).first()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске песни по ID: {e}")
         raise
 
 # Инициализация базы данных
