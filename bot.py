@@ -11,19 +11,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Инициализация базы данных
+# Инициализация базы данных область
 init_db()
 
 # Обработчик команды /start
 async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
-        'Привет!Используй команды:\n'
+        'Привет! Я хранитель текстов этнографических песен \n'
+        'Я (Создатель бота) хочу развивать удобство и получение народных песен (И вообще всей народной культуры) Я сделал этого бота на свои деньги и своими руками (Надеюсь вам понравится) Связь со мной @SwarmGost'
+        ' Сейчас я подробно расскажу про команды\n'
+        'Используй команды:\n'
         '/add - добавить песню\n'
         '/search_title - найти по названию\n'
         '/search_text - найти по тексту\n'
-        '/list - показать все песни\n'
-        '/list_by_region - показать песни по области\n'
-        '/h - справка'
+        '/list - найти все песни\n'
+        '/list_by_region - найти песни по Категориям\n'
+        '/help - справка'
+    )
+
+async def help(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text(
+        'Привет! Я хранитель текстов этнографических песен \nИспользуй команды:\n'
+        '/add - добавить песню\n'
+        '/search_title - найти по названию\n'
+        '/search_text - найти по тексту\n'
+        '/list - найти все песни\n'
+        '/list_by_region - найти песни по Категориям\n'
+        '/help - справка'
     )
 
 # Обработчик команды /add
@@ -33,7 +47,7 @@ async def add(update: Update, context: CallbackContext) -> None:
 
 # Обработчик команды /search_title
 async def search_title(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('Введите часть названия песни для поиска:')
+    await update.message.reply_text('Введите названиепесни:')
     context.user_data['awaiting_input'] = 'search_title'
 
 # Обработчик команды /search_text
@@ -62,7 +76,7 @@ async def list_songs(update: Update, context: CallbackContext) -> None:
 
 # Обработчик команды /list_by_region
 async def list_by_region(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('Введите область для поиска песен:')
+    await update.message.reply_text('Введите Категорию:')
     context.user_data['awaiting_input'] = 'awaiting_region'
 
 # Обработчик текстовых сообщений
@@ -77,7 +91,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         if context.user_data['awaiting_input'] == 'awaiting_title':
             # Сохраняем название песни
             context.user_data['title'] = user_input
-            await update.message.reply_text('Введите область:')
+            await update.message.reply_text('Введите Категорию:')
             context.user_data['awaiting_input'] = 'awaiting_region'
 
         elif context.user_data['awaiting_input'] == 'awaiting_region':
@@ -184,7 +198,7 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
         song = get_song_by_id(db, song_id)
         if song:
             await query.edit_message_text(
-                f"Название: {song.title}\nТекст: {song.text}\nОбласть: {song.region}\n /start"
+                f" Название: {song.title}\n\n Категория: {song.region}\n\n\n {song.text}\n /start"
             )
         else:
             await query.edit_message_text("Песня не найдена.")
@@ -199,7 +213,7 @@ def main():
 
     # Регистрация обработчиков команд
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("h", start))
+    application.add_handler(CommandHandler("help", help))
     application.add_handler(CommandHandler("add", add))
     application.add_handler(CommandHandler("search_title", search_title))
     application.add_handler(CommandHandler("search_text", search_text))
