@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text
+from sqlalchemy import create_engine, Column, Integer, String, Text, LargeBinary
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 # Создаем движок SQLAlchemy для PostgreSQL
 engine = create_engine(DATABASE_URL)
+
+# Создаем SessionLocal для работы с базой данных
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Проверяем подключение к базе данных
 try:
@@ -23,9 +26,6 @@ except Exception as e:
 # Создаем базовый класс для моделей
 Base = declarative_base()
 
-# Создаем сессию для работы с базой данных
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 # Модель для таблицы песен
 class Song(Base):
     __tablename__ = "songs"
@@ -33,7 +33,8 @@ class Song(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     text = Column(Text)  # Текст песни (опционально)
-    region = Column(String, nullable=False)
+    region = Column(String, nullable=False)  # Категория и место записи в формате "категория@@место_записи"
+    audio_file = Column(LargeBinary)  # Аудиозапись в бинарном формате
 
 # Создаем таблицы в базе данных (если их нет)
 def init_db():
@@ -53,14 +54,17 @@ def get_db():
         db.close()
 
 # Функция для добавления песни
-def add_song(db, title: str, region: str, text: str = None):
+def add_song(db, title: str, category: str, place: str, text: str = None, audio_file: bytes = None):
     try:
-        # Проверяем, что title и region не пустые
-        if not title or not region:
-            raise ValueError("Название и область не могут быть пустыми")
+        # Проверяем, что title, category и place не пустые
+        if not title or not category or not place:
+            raise ValueError("Название, категория и место записи не могут быть пустыми")
+
+        # Формируем значение для столбца region
+        region = f"{category}@@{place}"
 
         # Создаем объект песни
-        song = Song(title=title, text=text, region=region)
+        song = Song(title=title, text=text, region=region, audio_file=audio_file)
         db.add(song)
         db.commit()
         db.refresh(song)
@@ -79,12 +83,41 @@ def get_all_songs(db):
         logger.error(f"Ошибка при получении списка песен: {e}")
         raise
 
-# Функция для поиска песен по области
-def get_songs_by_region(db, region: str):
+# Функция для поиска песен по категории
+def get_songs_by_category(db, category: str):
     try:
-        return db.query(Song).filter(Song.region.ilike(f"%{region}%")).all()
+        return db.query(Song).filter(Song.region.ilike(f"%{category}@@%")).all()
     except Exception as e:
-        logger.error(f"Ошибка при поиске песен по области: {e}")
+        logger.error(f"Ошибка при поиске песен по категории: {e}")
+        raise
+
+# Функция для поиска песен по месту записи
+def get_songs_by_place(db, place: str):
+    try:
+        return db.query(Song).filter(Song.region.ilike(f"%@@{place}%")).all()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске песен по месту записи: {e}")
+        raise
+
+# Функция для обновления места записи в существующей песне
+def update_song_place(db, song_id: int, new_place: str):
+    try:
+        song = db.query(Song).filter(Song.id == song_id).first()
+        if song is None:
+            raise ValueError("Песня не найдена")
+
+        # Разделяем текущее значение region на категорию и место записи
+        category, _ = song.region.split("@@")
+
+        # Обновляем место записи
+        song.region = f"{category}@@{new_place}"
+        db.commit()
+        db.refresh(song)
+        logger.info(f"Обновлено место записи для песни: {song.title}")
+        return song
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Ошибка при обновлении места записи: {e}")
         raise
 
 # Функция для поиска песни по названию
@@ -93,6 +126,22 @@ def search_by_title(db, title: str):
         return db.query(Song).filter(Song.title.ilike(f"%{title}%")).all()
     except Exception as e:
         logger.error(f"Ошибка при поиске песни по названию: {e}")
+        raise
+
+def update_song_audio(db, song_id: int, audio_file: bytes):
+    try:
+        song = db.query(Song).filter(Song.id == song_id).first()
+        if song is None:
+            raise ValueError("Песня не найдена")
+
+        song.audio_file = audio_file
+        db.commit()
+        db.refresh(song)
+        logger.info(f"Обновлена аудиозапись для песни: {song.title}")
+        return song
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Ошибка при обновлении аудиозаписи: {e}")
         raise
 
 # Функция для поиска песни по тексту
