@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
 from env import DATABASE_URL  # Убедитесь, что DATABASE_URL указан в .env
@@ -26,14 +26,15 @@ Base = declarative_base()
 # Создаем сессию для работы с базой данных
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Модель для таблицы песен
 class Song(Base):
-    __tablename__ = "songs"
+    __tablename__ = "folk_songs"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     text = Column(Text)  # Текст песни (опционально)
     region = Column(String, nullable=False)
+    category = Column(String)  # Новый столбец для категории
+
 
 # Создаем таблицы в базе данных (если их нет)
 def init_db():
@@ -86,6 +87,79 @@ def get_songs_by_region(db, region: str):
     except Exception as e:
         logger.error(f"Ошибка при поиске песен по области: {e}")
         raise
+
+
+# Функция для удаления песни по ID
+def delete_song(db, song_id: int):
+    try:
+        song = db.query(Song).filter(Song.id == song_id).first()
+        if not song:
+            raise ValueError(f"Песня с ID {song_id} не найдена")
+
+        db.delete(song)
+        db.commit()
+        logger.info(f"Удалена песня с ID {song_id}")
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Ошибка при удалении песни: {e}")
+        raise
+
+# Функция для обновления информации о песне
+def update_song(
+    db,
+    song_id: int,
+    title: str = None,
+    text: str = None,
+    region: str = None,
+    category: str = None
+):
+    try:
+        song = db.query(Song).filter(Song.id == song_id).first()
+        if not song:
+            raise ValueError(f"Песня с ID {song_id} не найдена")
+
+        if title is not None:
+            song.title = title
+        if text is not None:
+            song.text = text
+        if region is not None:
+            song.region = region
+        if category is not None:
+            song.category = category
+
+        db.commit()
+        db.refresh(song)
+        logger.info(f"Обновлена песня с ID {song_id}")
+        return song
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Ошибка при обновлении песни: {e}")
+        raise
+
+# Функция для получения всех песен с их ID и другими полями
+def get_all_songs_with_id(db):
+    try:
+        # Query all songs and return them with all fields including id
+        songs = db.query(Song.id, Song.title, Song.text, Song.region, Song.category).all()
+        
+        # Convert the result to a list of dictionaries for easier handling
+        songs_list = [
+            {
+                "id": song.id,
+                "title": song.title,
+                "text": song.text,
+                "region": song.region,
+                "category": song.category
+            }
+            for song in songs
+        ]
+        
+        return songs_list
+    except Exception as e:
+        logger.error(f"Ошибка при получении списка песен с ID: {e}")
+        raise
+
 
 # Функция для поиска песни по названию
 def search_by_title(db, title: str):
