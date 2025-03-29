@@ -1,3 +1,5 @@
 venv
+lbot.log
+
 env.py
 __pycache__
