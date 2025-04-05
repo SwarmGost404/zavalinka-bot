@@ -88,21 +88,24 @@ def get_songs_by_region(db, region: str):
         logger.error(f"Ошибка при поиске песен по области: {e}")
         raise
 
-
 # Функция для удаления песни по ID
 def delete_song(db, song_id: int):
     try:
+        # Логируем попытку удаления
+        logger.info(f"Попытка удалить песню с ID: {song_id}")
+        
         song = db.query(Song).filter(Song.id == song_id).first()
         if not song:
+            logger.warning(f"Песня с ID {song_id} не найдена")
             raise ValueError(f"Песня с ID {song_id} не найдена")
 
         db.delete(song)
         db.commit()
-        logger.info(f"Удалена песня с ID {song_id}")
+        logger.info(f"Удалена песня с ID {song_id}: {song.title}")
         return True
     except Exception as e:
         db.rollback()
-        logger.error(f"Ошибка при удалении песни: {e}")
+        logger.error(f"Ошибка при удалении песни с ID {song_id}: {e}", exc_info=True)
         raise
 
 # Функция для обновления информации о песне

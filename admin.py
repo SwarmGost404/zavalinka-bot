@@ -131,10 +131,26 @@ async def confirm_delete(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text("❌ Нет данных для удаления")
         return
     
-    db = next(get_db())
+    db = None
     try:
+        db = next(get_db())
         song_id = context.user_data['song_to_delete']['id']
+        
+        # Логируем перед удалением
+        logger.info(f"Попытка удалить песню с ID: {song_id}")
+        
+        # Проверяем существование песни перед удалением
+        song = get_song_by_id(db, song_id)
+        if not song:
+            await update.message.reply_text(f"❌ Песня с ID {song_id} не найдена")
+            return
+            
+        # Удаляем песню
         delete_song(db, song_id)
+        
+        # Логируем успешное удаление
+        logger.info(f"Песня с ID {song_id} успешно удалена")
+        
         await update.message.reply_text(
             f"✅ Песня успешно удалена!\n"
             f"ID: {song_id}\n"
@@ -142,11 +158,12 @@ async def confirm_delete(update: Update, context: CallbackContext) -> None:
             f"/start"
         )
     except Exception as e:
-        logger.error(f"Ошибка при удалении песни: {e}")
+        logger.error(f"Ошибка при удалении песни: {e}", exc_info=True)
         await update.message.reply_text("❌ Произошла ошибка при удалении песни")
     finally:
+        if db:
+            db.close()
         context.user_data.clear()
-        db.close()
 
 async def cancel_action(update: Update, context: CallbackContext) -> None:
     if 'action' in context.user_data:
