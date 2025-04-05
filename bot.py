@@ -3,6 +3,7 @@ from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    BotCommand,
     MenuButtonCommands
 )
 from telegram.ext import (
@@ -44,21 +45,27 @@ def parse_region(region_str):
         return category, place
     return region_str, ""
 
-async def set_menu_button(application: Application):
-    """Set the menu button in the Telegram UI"""
-    await application.bot.set_chat_menu_button(
-        menu_button=MenuButtonCommands()
-    )
+async def setup_commands(application: Application):
+    """Set up the bot commands for the menu"""
+    commands = [
+        BotCommand("start", "Главное меню"),
+        BotCommand("add", "Добавить новую песню"),
+        BotCommand("search", "Поиск песен"),
+        BotCommand("all", "Список всех песен"),
+        BotCommand("help", "Помощь и инструкции")
+    ]
+    await application.bot.set_my_commands(commands)
+    await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
 async def show_main_menu(update: Update, context: CallbackContext):
     help_text = (
         "🎵 *Этнографический архив песен*\n\n"
-        "Используйте команды для работы с ботом:\n\n"
+        "Используйте команды из меню или введите вручную:\n\n"
         "/add - Добавить новую песню\n"
         "/search - Поиск песен\n"
         "/all - Список всех песен\n"
         "/help - Помощь и инструкции\n\n"
-        "Нажмите кнопку меню рядом со стикерами, чтобы увидеть все команды"
+        "Нажмите кнопку 'Меню' внизу слева, чтобы увидеть все команды"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
@@ -73,7 +80,7 @@ async def help_command(update: Update, context: CallbackContext) -> None:
         "• /search - Поиск песен (по названию, тексту, месту или категории)\n"
         "• /all - Просмотр всего архива\n"
         "• /help - Эта справка\n\n"
-        "Все команды также доступны через кнопку меню рядом со стикерами"
+        "Все команды также доступны через кнопку 'Меню' внизу слева"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
@@ -131,7 +138,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     if 'awaiting_input' not in context.user_data:
         await update.message.reply_text(
             "Используйте команды для взаимодействия с ботом. /help - для списка команд\n"
-            "Или нажмите кнопку меню рядом со стикерами"
+            "Или нажмите кнопку 'Меню' внизу слева"
         )
         return
 
@@ -215,7 +222,7 @@ async def save_song(update: Update, context: CallbackContext) -> None:
         if place:
             response_message += f'*Место записи:* {place}\n'
         
-        response_message += '\nДля продолжения используйте команды (/help - список команд)'
+        response_message += '\nДля продолжения используйте команды из меню (/help - список команд)'
         
         await update.message.reply_text(response_message, parse_mode='Markdown')
         context.user_data.clear()
@@ -252,7 +259,7 @@ async def handle_song_details(query):
                 response_text += f"*Место записи:* {place}\n\n"
             
             response_text += f"*Текст:*\n{song.text}\n\n"
-            response_text += "Для продолжения используйте команды (/help - список команд)"
+            response_text += "Для продолжения используйте команды из меню (/help - список команд)"
             
             await query.edit_message_text(
                 response_text,
@@ -295,9 +302,8 @@ def main():
     # Register callback handler
     application.add_handler(CallbackQueryHandler(button_callback))
 
-    # Set menu button on startup
-    application.add_handler(CommandHandler("setcommands", set_menu_button))
-    application.post_init = set_menu_button
+    # Set up commands menu
+    application.post_init = setup_commands
 
     # Run the bot
     application.run_polling()
