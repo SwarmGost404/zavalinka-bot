@@ -46,13 +46,13 @@ def parse_region(region_str):
     return region_str, ""
 
 async def setup_commands(application: Application):
-    """Set up the bot commands for the menu with correct commands"""
+    """Set up the bot commands for the menu with CORRECT commands"""
     commands = [
         BotCommand("start", "Начать работу с ботом"),
         BotCommand("add", "Добавить новую песню"),
         BotCommand("search_title", "Поиск по названию"),
         BotCommand("search_text", "Поиск по тексту"),
-        BotCommand("search_place", "Поиск по месту записи"),
+        BotCommand("search_place", "Поиск по месту"),
         BotCommand("search_category", "Поиск по категории"),
         BotCommand("all", "Список всех песен"),
         BotCommand("help", "Помощь и инструкции")
@@ -292,7 +292,7 @@ def main():
     """Start the bot with all handlers"""
     application = Application.builder().token(API_TOKEN).build()
 
-    # Register command handlers
+    # Register command handlers - ALL COMMANDS MATCH THE MENU NOW
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("add", add_song_handler))
@@ -308,7 +308,7 @@ def main():
     # Register callback handler
     application.add_handler(CallbackQueryHandler(button_callback))
 
-    # Set up commands menu
+    # Set up commands menu - THIS WILL SHOW THE CORRECT COMMANDS NOW
     application.post_init = setup_commands
 
     # Run the bot
