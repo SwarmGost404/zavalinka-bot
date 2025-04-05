@@ -1,5 +1,11 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    BotCommand,
+    MenuButtonCommands
+)
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -39,8 +45,23 @@ def parse_region(region_str):
         return category, place
     return region_str, ""
 
+async def setup_commands(application: Application):
+    """Set up the bot commands for the menu with correct commands"""
+    commands = [
+        BotCommand("start", "Начать работу с ботом"),
+        BotCommand("add", "Добавить новую песню"),
+        BotCommand("search_title", "Поиск по названию"),
+        BotCommand("search_text", "Поиск по тексту"),
+        BotCommand("search_place", "Поиск по месту записи"),
+        BotCommand("search_category", "Поиск по категории"),
+        BotCommand("all", "Список всех песен"),
+        BotCommand("help", "Помощь и инструкции")
+    ]
+    await application.bot.set_my_commands(commands)
+    await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+
 async def start_command(update: Update, context: CallbackContext):
-    """Send a message when the command /start is issued."""
+    """Send a welcome message with available commands"""
     help_text = (
         "🎵 Этнографический архив песен\n\n"
         "Доступные команды:\n\n"
@@ -55,18 +76,18 @@ async def start_command(update: Update, context: CallbackContext):
     await update.message.reply_text(help_text)
 
 async def help_command(update: Update, context: CallbackContext) -> None:
-    """Send a help message"""
+    """Send a help message with detailed command info"""
     help_text = (
         "🎵 Этнографический архив песен\n\n"
         "Связь с создателем: @SwarmGost\n\n"
         "Доступные команды:\n\n"
-        "/start - Главное меню\n"
-        "/add - Добавить новую песню\n"
-        "/search_title - Поиск по названию\n"
-        "/search_text - Поиск по тексту\n"
-        "/search_place - Поиск по месту записи\n"
-        "/search_category - Поиск по категории\n"
-        "/all - Список всех песен\n"
+        "/start - Начать работу с ботом\n"
+        "/add - Добавить новую песню в архив\n"
+        "/search_title - Поиск песен по названию\n"
+        "/search_text - Поиск песен по тексту\n"
+        "/search_place - Поиск песен по месту записи\n"
+        "/search_category - Поиск песен по категории\n"
+        "/all - Просмотр всего архива\n"
         "/help - Эта справка"
     )
     await update.message.reply_text(help_text)
@@ -97,7 +118,7 @@ async def search_category_handler(update: Update, context: CallbackContext) -> N
     context.user_data['awaiting_input'] = 'search_category'
 
 async def list_songs_handler(update: Update, context: CallbackContext) -> None:
-    """List all songs"""
+    """List all songs with inline buttons"""
     db = next(get_db())
     try:
         results = get_all_songs(db)
@@ -125,7 +146,7 @@ async def list_songs_handler(update: Update, context: CallbackContext) -> None:
         db.close()
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
-    """Handle all non-command messages"""
+    """Handle all non-command messages based on current state"""
     if 'awaiting_input' not in context.user_data:
         await update.message.reply_text("Используйте команды для взаимодействия с ботом. /help - для списка команд")
         return
@@ -236,7 +257,7 @@ async def save_song(update: Update, context: CallbackContext) -> None:
         db.close()
 
 async def button_callback(update: Update, context: CallbackContext) -> None:
-    """Handle inline button callbacks"""
+    """Handle inline button callbacks for song details"""
     query = update.callback_query
     await query.answer()
     
@@ -268,7 +289,7 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
             db.close()
 
 def main():
-    """Start the bot"""
+    """Start the bot with all handlers"""
     application = Application.builder().token(API_TOKEN).build()
 
     # Register command handlers
@@ -286,6 +307,9 @@ def main():
 
     # Register callback handler
     application.add_handler(CallbackQueryHandler(button_callback))
+
+    # Set up commands menu
+    application.post_init = setup_commands
 
     # Run the bot
     application.run_polling()
