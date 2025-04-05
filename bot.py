@@ -1,7 +1,7 @@
 import logging
 from telegram import (
-    Update, 
-    InlineKeyboardButton, 
+    Update,
+    InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
     KeyboardButton
@@ -16,8 +16,8 @@ from telegram.ext import (
 )
 from env import API_TOKEN
 from database import (
-    init_db, get_db, add_song, get_all_songs, 
-    get_songs_by_region, search_by_title, 
+    init_db, get_db, add_song, get_all_songs,
+    get_songs_by_region, search_by_title,
     search_by_text, get_song_by_id
 )
 
@@ -131,6 +131,27 @@ async def list_by_region_handler(update: Update, context: CallbackContext) -> No
     await update.message.reply_text('Введите категорию:')
     context.user_data['awaiting_input'] = 'awaiting_region'
 
+async def display_results(update: Update, results, search_description, context: CallbackContext):
+    if results:
+        keyboard = []
+        for song in results:
+            category, place = parse_region(song.region)
+            button_text = song.title
+            if place:
+                button_text = f"{song.title} ({place})"
+            
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"song_{song.id}")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            f"🔍 *Результаты поиска {search_description}:*",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(f"❌ По запросу {search_description} ничего не найдено.")
+    await show_main_menu(update, context)
+
 async def handle_message(update: Update, context: CallbackContext) -> None:
     user_input = update.message.text
 
@@ -188,23 +209,23 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         elif context.user_data['awaiting_input'] == 'search_title':
             db = next(get_db())
             results = search_by_title(db, user_input)
-            await display_results(update, results, f"по названию '{user_input}'")
+            await display_results(update, results, f"по названию '{user_input}'", context)
 
         elif context.user_data['awaiting_input'] == 'search_text':
             db = next(get_db())
             results = search_by_text(db, user_input)
-            await display_results(update, results, f"по тексту '{user_input}'")
+            await display_results(update, results, f"по тексту '{user_input}'", context)
 
         elif context.user_data['awaiting_input'] == 'search_place':
             db = next(get_db())
             results = [song for song in get_all_songs(db) 
                       if '|' in song.region and user_input.lower() in song.region.lower().split('|')[1]]
-            await display_results(update, results, f"по месту записи '{user_input}'")
+            await display_results(update, results, f"по месту записи '{user_input}'", context)
 
         elif context.user_data['awaiting_input'] == 'awaiting_region':
             db = next(get_db())
             results = get_songs_by_region(db, user_input)
-            await display_results(update, results, f"в категории '{user_input}'")
+            await display_results(update, results, f"в категории '{user_input}'", context)
 
     except ValueError:
         await update.message.reply_text("Неверный формат ввода. Попробуйте снова.")
@@ -216,27 +237,6 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     finally:
         if context.user_data['awaiting_input'] not in ['awaiting_title', 'awaiting_region', 'awaiting_place', 'awaiting_text']:
             context.user_data.clear()
-
-async def display_results(update: Update, results, search_description):
-    if results:
-        keyboard = []
-        for song in results:
-            category, place = parse_region(song.region)
-            button_text = song.title
-            if place:
-                button_text = f"{song.title} ({place})"
-            
-            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"song_{song.id}")])
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(
-            f"🔍 *Результаты поиска {search_description}:*",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-    else:
-        await update.message.reply_text(f"❌ По запросу {search_description} ничего не найдено.")
-    await show_main_menu(update, context)
 
 async def save_song(update: Update, context: CallbackContext) -> None:
     db = next(get_db())
