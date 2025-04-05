@@ -101,25 +101,7 @@ async def list_songs_handler(update: Update, context: CallbackContext) -> None:
     db = next(get_db())
     try:
         results = get_all_songs(db)
-        if results:
-            keyboard = []
-            for result in results:
-                category, place = parse_region(result.region)
-                button_text = result.title
-                if place:
-                    button_text = f"{result.title} ({place})"
-                
-                keyboard.append([InlineKeyboardButton(button_text, callback_data=f"song_{result.id}")])
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(
-                "📋 *Список песен:*",
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
-        else:
-            await update.message.reply_text('В базе данных нет песен.')
-            await show_main_menu(update, context)
+        await display_results(update, results, "все песни", context)
     except Exception as e:
         logger.error(f"Ошибка при получении списка песен: {e}")
         await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
@@ -136,15 +118,15 @@ async def display_results(update: Update, results, search_description, context: 
         keyboard = []
         for song in results:
             category, place = parse_region(song.region)
-            button_text = song.title
+            button_text = f"{song.title}"
             if place:
-                button_text = f"{song.title} ({place})"
+                button_text += f" ({place})"
             
             keyboard.append([InlineKeyboardButton(button_text, callback_data=f"song_{song.id}")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
-            f"🔍 *Результаты поиска {search_description}:*",
+            f"🔍 *Найдены песни {search_description}:*",
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
