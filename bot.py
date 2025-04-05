@@ -2,9 +2,7 @@ import logging
 from telegram import (
     Update,
     InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    ReplyKeyboardMarkup,
-    KeyboardButton
+    InlineKeyboardMarkup
 )
 from telegram.ext import (
     Application,
@@ -47,36 +45,31 @@ def parse_region(region_str):
 
 # Menu functions
 async def show_main_menu(update: Update, context: CallbackContext):
-    keyboard = [
-        [KeyboardButton("Добавить песню")],
-        [
-            KeyboardButton("Поиск по названию"),
-            KeyboardButton("Поиск по тексту")
-        ],
-        [
-            KeyboardButton("Поиск по месту"),
-            KeyboardButton("Список всех песен")
-        ],
-        [KeyboardButton("Поиск по категории")],
-        [KeyboardButton("Помощь")]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    text = "🎵 *Этнографический архив песен*\nВыберите действие:"
-    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    help_text = (
+        "🎵 *Этнографический архив песен*\n\n"
+        "Доступные команды:\n\n"
+        "/add - Добавить новую песню в архив\n"
+        "/search_title - Поиск по названию песни\n"
+        "/search_text - Поиск по тексту песни\n"
+        "/search_place - Поиск по месту записи\n"
+        "/search_category - Поиск по категории\n"
+        "/all - Список всех песен\n"
+        "/help - Помощь и инструкции\n"
+    )
+    await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def help_command(update: Update, context: CallbackContext) -> None:
     help_text = (
         "🎵 *Этнографический архив песен*\n\n"
         "Я (Создатель бота) хочу развивать удобство и получение народных песен. "
         "Я сделал этого бота на свои деньги и своими руками. Связь со мной @SwarmGost\n\n"
-        "*Используйте кнопки меню для работы:*\n\n"
-        "• *Добавить песню* - новая запись в архив\n"
-        "• *Поиск по названию* - найти песни по названию\n"
-        "• *Поиск по тексту* - найти по тексту песни\n"
-        "• *Поиск по месту* - найти по месту записи\n"
-        "• *Список всех песен* - просмотр всего архива\n"
-        "• *Поиск по категории* - найти по категории\n\n"
+        "*Используйте команды для работы:*\n\n"
+        "• /add - новая запись в архив\n"
+        "• /search_title - найти песни по названию\n"
+        "• /search_text - найти по тексту песни\n"
+        "• /search_place - найти по месту записи\n"
+        "• /all - просмотр всего архива\n"
+        "• /search_category - найти по категории\n\n"
         "Для возврата в главное меню используйте команду /start"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
@@ -135,35 +128,11 @@ async def display_results(update: Update, results, search_description, context: 
     await show_main_menu(update, context)
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
-    user_input = update.message.text
-
-    # Handle menu buttons
-    if user_input == "Добавить песню":
-        await add_song_handler(update, context)
-        return
-    elif user_input == "Поиск по названию":
-        await search_title_handler(update, context)
-        return
-    elif user_input == "Поиск по тексту":
-        await search_text_handler(update, context)
-        return
-    elif user_input == "Поиск по месту":
-        await search_place_handler(update, context)
-        return
-    elif user_input == "Список всех песен":
-        await list_songs_handler(update, context)
-        return
-    elif user_input == "Поиск по категории":
-        await list_by_region_handler(update, context)
-        return
-    elif user_input == "Помощь":
-        await help_command(update, context)
-        return
-
     if 'awaiting_input' not in context.user_data:
-        await update.message.reply_text("Используйте меню для взаимодействия с ботом.")
-        await show_main_menu(update, context)
+        await update.message.reply_text("Используйте команды для взаимодействия с ботом. /help - для списка команд")
         return
+
+    user_input = update.message.text
 
     try:
         if context.user_data['awaiting_input'] == 'awaiting_title':
@@ -243,7 +212,7 @@ async def save_song(update: Update, context: CallbackContext) -> None:
         if place:
             response_message += f'*Место записи:* {place}\n'
         
-        response_message += '\nДля продолжения используйте меню'
+        response_message += '\nДля продолжения используйте команды (/help - список команд)'
         
         await update.message.reply_text(response_message, parse_mode='Markdown')
         context.user_data.clear()
@@ -273,7 +242,7 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
                 response_text += f"*Место записи:* {place}\n\n"
             
             response_text += f"*Текст:*\n{song.text}\n\n"
-            response_text += "Для продолжения используйте меню"
+            response_text += "Для продолжения используйте команды (/help - список команд)"
             
             await query.edit_message_text(
                 response_text,
@@ -293,12 +262,12 @@ def main():
     # Register command handlers
     application.add_handler(CommandHandler("start", show_main_menu))
     application.add_handler(CommandHandler("help", help_command))
-
-    # Register message handlers for menu buttons
-    application.add_handler(MessageHandler(filters.Text([
-        "Добавить песню", "Поиск по названию", "Поиск по тексту",
-        "Поиск по месту", "Список всех песен", "Поиск по категории", "Помощь"
-    ]), handle_message))
+    application.add_handler(CommandHandler("add", add_song_handler))
+    application.add_handler(CommandHandler("search_title", search_title_handler))
+    application.add_handler(CommandHandler("search_text", search_text_handler))
+    application.add_handler(CommandHandler("search_place", search_place_handler))
+    application.add_handler(CommandHandler("search_category", list_by_region_handler))
+    application.add_handler(CommandHandler("all", list_songs_handler))
 
     # Register other message handlers
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
