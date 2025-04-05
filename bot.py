@@ -14,7 +14,21 @@ logger = logging.getLogger(__name__)
 # Initialize database
 init_db()
 
-# Command handlers
+def parse_region(region_str):
+    """Parse region string into category and place"""
+    if not region_str:
+        return "", ""
+    
+    if '|' in region_str:
+        parts = region_str.split('|')
+        category = parts[0]
+        place = parts[1] if len(parts) > 1 else ""
+        # Если место - это просто точка или пустое, возвращаем только категорию
+        if place.strip() in ("", "."):
+            return category, ""
+        return category, place
+    return region_str, ""
+
 async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
         'Привет! Я хранитель текстов этнографических песен\n'
@@ -64,13 +78,16 @@ async def list_songs(update: Update, context: CallbackContext) -> None:
     try:
         results = get_all_songs(db)
         if results:
-            keyboard = [
-                [InlineKeyboardButton(
-                    f"{result.title} ({parse_region(result.region)[1]})" if '|' in result.region else result.title,
-                    callback_data=f"song_{result.id}"
-                )]
-                for result in results
-            ]
+            keyboard = []
+            for result in results:
+                category, place = parse_region(result.region)
+                # Формируем текст кнопки без скобок, если место пустое
+                button_text = result.title
+                if place:
+                    button_text = f"{result.title} ({place})"
+                
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=f"song_{result.id}")])
+            
             reply_markup = InlineKeyboardMarkup(keyboard)
             await update.message.reply_text("Список песен:", reply_markup=reply_markup)
         else:
@@ -82,13 +99,6 @@ async def list_songs(update: Update, context: CallbackContext) -> None:
 async def list_by_region(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text('Введите категорию:')
     context.user_data['awaiting_input'] = 'awaiting_region'
-
-def parse_region(region_str):
-    """Parse region string into category and place"""
-    if '|' in region_str:
-        parts = region_str.split('|')
-        return parts[0], parts[1] if len(parts) > 1 else "не указано"
-    return region_str, "не указано"
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
     user_input = update.message.text
@@ -105,11 +115,15 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
 
         elif context.user_data['awaiting_input'] == 'awaiting_region':
             context.user_data['region'] = user_input
-            await update.message.reply_text('Введите место записи (например, "Село Вятское Ярославской области"):')
+            await update.message.reply_text('Введите место записи (например, "Село Вятское Ярославской области"), или точку (.), если не нужно:')
             context.user_data['awaiting_input'] = 'awaiting_place'
 
         elif context.user_data['awaiting_input'] == 'awaiting_place':
-            context.user_data['place'] = user_input
+            # Если пользователь ввел точку или пустую строку, не добавляем место
+            if user_input.strip() in ("", "."):
+                context.user_data['place'] = ""
+            else:
+                context.user_data['place'] = user_input
             await update.message.reply_text('Отправьте текст песни:')
             context.user_data['awaiting_input'] = 'awaiting_text'
 
@@ -150,13 +164,16 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
 
 async def display_results(update: Update, results, search_description):
     if results:
-        keyboard = [
-            [InlineKeyboardButton(
-                f"{song.title} ({parse_region(song.region)[1]})" if '|' in song.region else song.title,
-                callback_data=f"song_{song.id}"
-            )]
-            for song in results
-        ]
+        keyboard = []
+        for song in results:
+            category, place = parse_region(song.region)
+            # Формируем текст кнопки без скобок, если место пустое
+            button_text = song.title
+            if place:
+                button_text = f"{song.title} ({place})"
+            
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"song_{song.id}")])
+        
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             f"Найдены песни {search_description}:",
@@ -173,16 +190,21 @@ async def save_song(update: Update, context: CallbackContext) -> None:
         place = context.user_data.get('place', '')
         text = context.user_data.get('text', '')
         
-        # Combine region and place with | separator
-        full_region = f"{region}|{place}"
+        # Если место не указано или это точка, сохраняем только категорию
+        if place.strip() in ("", "."):
+            full_region = region
+        else:
+            full_region = f"{region}|{place}"
         
         song = add_song(db, title=title, region=full_region, text=text)
-        await update.message.reply_text(
-            f'Песня "{title}" успешно добавлена!\n'
-            f'Категория: {region}\n'
-            f'Место записи: {place}\n'
-            f'/start'
-        )
+        
+        # Формируем сообщение без места, если оно не указано
+        response_message = f'Песня "{title}" успешно добавлена!\nКатегория: {region}\n'
+        if place:
+            response_message += f'Место записи: {place}\n'
+        response_message += '/start'
+        
+        await update.message.reply_text(response_message)
         context.user_data.clear()
     except Exception as e:
         logger.error(f"Ошибка при сохранении песни: {e}")
@@ -199,13 +221,12 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
         song = get_song_by_id(db, song_id)
         if song:
             category, place = parse_region(song.region)
-            await query.edit_message_text(
-                f"Название: {song.title}\n\n"
-                f"Категория: {category}\n\n"
-                f"Место записи: {place}\n\n"
-                f"Текст:\n{song.text}\n\n"
-                f"/start"
-            )
+            response_text = f"Название: {song.title}\n\nКатегория: {category}\n\n"
+            if place:
+                response_text += f"Место записи: {place}\n\n"
+            response_text += f"Текст:\n{song.text}\n\n/start"
+            
+            await query.edit_message_text(response_text)
         else:
             await query.edit_message_text("Песня не найдена.\n/start")
     except Exception as e:
