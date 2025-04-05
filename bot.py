@@ -200,4 +200,39 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
         if song:
             category, place = parse_region(song.region)
             await query.edit_message_text(
-                f"Название: {song.titl
+                f"Название: {song.title}\n\n"
+                f"Категория: {category}\n\n"
+                f"Место записи: {place}\n\n"
+                f"Текст:\n{song.text}\n\n"
+                f"/start"
+            )
+        else:
+            await query.edit_message_text("Песня не найдена.\n/start")
+    except Exception as e:
+        logger.error(f"Ошибка при получении текста песни: {e}")
+        await query.edit_message_text("Произошла ошибка. Попробуйте позже.\n/start")
+
+def main():
+    application = Application.builder().token(API_TOKEN).build()
+
+    # Register command handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help))
+    application.add_handler(CommandHandler("add", add))
+    application.add_handler(CommandHandler("search_title", search_title))
+    application.add_handler(CommandHandler("search_text", search_text))
+    application.add_handler(CommandHandler("search_place", search_place))
+    application.add_handler(CommandHandler("list", list_songs))
+    application.add_handler(CommandHandler("list_by_region", list_by_region))
+
+    # Register message handlers
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # Register callback handler
+    application.add_handler(CallbackQueryHandler(button_callback))
+
+    # Run the bot
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
