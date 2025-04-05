@@ -2,7 +2,8 @@ import logging
 from telegram import (
     Update,
     InlineKeyboardButton,
-    InlineKeyboardMarkup
+    InlineKeyboardMarkup,
+    MenuButtonCommands
 )
 from telegram.ext import (
     Application,
@@ -43,18 +44,21 @@ def parse_region(region_str):
         return category, place
     return region_str, ""
 
-# Menu functions
+async def set_menu_button(application: Application):
+    """Set the menu button in the Telegram UI"""
+    await application.bot.set_chat_menu_button(
+        menu_button=MenuButtonCommands()
+    )
+
 async def show_main_menu(update: Update, context: CallbackContext):
     help_text = (
         "🎵 *Этнографический архив песен*\n\n"
-        "Доступные команды:\n\n"
-        "/add - Добавить новую песню в архив\n"
-        "/search_title - Поиск по названию песни\n"
-        "/search_text - Поиск по тексту песни\n"
-        "/search_place - Поиск по месту записи\n"
-        "/search_category - Поиск по категории\n"
+        "Используйте команды для работы с ботом:\n\n"
+        "/add - Добавить новую песню\n"
+        "/search - Поиск песен\n"
         "/all - Список всех песен\n"
-        "/help - Помощь и инструкции\n"
+        "/help - Помощь и инструкции\n\n"
+        "Нажмите кнопку меню рядом со стикерами, чтобы увидеть все команды"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
@@ -63,14 +67,13 @@ async def help_command(update: Update, context: CallbackContext) -> None:
         "🎵 *Этнографический архив песен*\n\n"
         "Я (Создатель бота) хочу развивать удобство и получение народных песен. "
         "Я сделал этого бота на свои деньги и своими руками. Связь со мной @SwarmGost\n\n"
-        "*Используйте команды для работы:*\n\n"
-        "• /add - новая запись в архив\n"
-        "• /search_title - найти песни по названию\n"
-        "• /search_text - найти по тексту песни\n"
-        "• /search_place - найти по месту записи\n"
-        "• /all - просмотр всего архива\n"
-        "• /search_category - найти по категории\n\n"
-        "Для возврата в главное меню используйте команду /start"
+        "*Доступные команды:*\n\n"
+        "• /start - Главное меню\n"
+        "• /add - Добавить новую песню в архив\n"
+        "• /search - Поиск песен (по названию, тексту, месту или категории)\n"
+        "• /all - Просмотр всего архива\n"
+        "• /help - Эта справка\n\n"
+        "Все команды также доступны через кнопку меню рядом со стикерами"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
@@ -78,17 +81,18 @@ async def add_song_handler(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text('Введите название песни:')
     context.user_data['awaiting_input'] = 'awaiting_title'
 
-async def search_title_handler(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('Введите название песни для поиска:')
-    context.user_data['awaiting_input'] = 'search_title'
-
-async def search_text_handler(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('Введите текст песни для поиска:')
-    context.user_data['awaiting_input'] = 'search_text'
-
-async def search_place_handler(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('Введите место записи для поиска:')
-    context.user_data['awaiting_input'] = 'search_place'
+async def search_menu_handler(update: Update, context: CallbackContext) -> None:
+    keyboard = [
+        [InlineKeyboardButton("По названию", callback_data='search_title')],
+        [InlineKeyboardButton("По тексту", callback_data='search_text')],
+        [InlineKeyboardButton("По месту записи", callback_data='search_place')],
+        [InlineKeyboardButton("По категории", callback_data='search_category')],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "🔍 Выберите тип поиска:",
+        reply_markup=reply_markup
+    )
 
 async def list_songs_handler(update: Update, context: CallbackContext) -> None:
     db = next(get_db())
@@ -101,10 +105,6 @@ async def list_songs_handler(update: Update, context: CallbackContext) -> None:
         await show_main_menu(update, context)
     finally:
         db.close()
-
-async def list_by_region_handler(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('Введите категорию:')
-    context.user_data['awaiting_input'] = 'awaiting_region'
 
 async def display_results(update: Update, results, search_description, context: CallbackContext):
     if results:
@@ -129,7 +129,10 @@ async def display_results(update: Update, results, search_description, context: 
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
     if 'awaiting_input' not in context.user_data:
-        await update.message.reply_text("Используйте команды для взаимодействия с ботом. /help - для списка команд")
+        await update.message.reply_text(
+            "Используйте команды для взаимодействия с ботом. /help - для списка команд\n"
+            "Или нажмите кнопку меню рядом со стикерами"
+        )
         return
 
     user_input = update.message.text
@@ -173,7 +176,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                       if '|' in song.region and user_input.lower() in song.region.lower().split('|')[1]]
             await display_results(update, results, f"по месту записи '{user_input}'", context)
 
-        elif context.user_data['awaiting_input'] == 'awaiting_region':
+        elif context.user_data['awaiting_input'] == 'search_category':
             db = next(get_db())
             results = get_songs_by_region(db, user_input)
             await display_results(update, results, f"в категории '{user_input}'", context)
@@ -226,6 +229,13 @@ async def save_song(update: Update, context: CallbackContext) -> None:
 async def button_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     await query.answer()
+    
+    if query.data.startswith('song_'):
+        await handle_song_details(query)
+    else:
+        await handle_search_menu(query, context)
+
+async def handle_song_details(query):
     song_id = int(query.data.split("_")[1])
     db = next(get_db())
     
@@ -256,6 +266,19 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
     finally:
         db.close()
 
+async def handle_search_menu(query, context: CallbackContext):
+    search_type = query.data
+    context.user_data['awaiting_input'] = search_type
+    
+    prompt_text = {
+        'search_title': 'Введите название песни для поиска:',
+        'search_text': 'Введите текст песни для поиска:',
+        'search_place': 'Введите место записи для поиска:',
+        'search_category': 'Введите категорию для поиска:'
+    }.get(search_type, 'Введите запрос для поиска:')
+    
+    await query.edit_message_text(prompt_text)
+
 def main():
     application = Application.builder().token(API_TOKEN).build()
 
@@ -263,10 +286,7 @@ def main():
     application.add_handler(CommandHandler("start", show_main_menu))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("add", add_song_handler))
-    application.add_handler(CommandHandler("search_title", search_title_handler))
-    application.add_handler(CommandHandler("search_text", search_text_handler))
-    application.add_handler(CommandHandler("search_place", search_place_handler))
-    application.add_handler(CommandHandler("search_category", list_by_region_handler))
+    application.add_handler(CommandHandler("search", search_menu_handler))
     application.add_handler(CommandHandler("all", list_songs_handler))
 
     # Register other message handlers
@@ -274,6 +294,10 @@ def main():
 
     # Register callback handler
     application.add_handler(CallbackQueryHandler(button_callback))
+
+    # Set menu button on startup
+    application.add_handler(CommandHandler("setcommands", set_menu_button))
+    application.post_init = set_menu_button
 
     # Run the bot
     application.run_polling()
