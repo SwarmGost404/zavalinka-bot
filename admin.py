@@ -313,3 +313,161 @@ async def apply_changes(update: Update, context: CallbackContext) -> None:
             db.close()
         context.user_data.clear()
         await show_main_menu(update, context)
+
+async def display_results(update: Update, results, search_description):
+    if results:
+        keyboard = [
+            [InlineKeyboardButton(
+                f"{song.title} ({parse_region(song.region)[1]})" if '|' in song.region else song.title,
+                callback_data=f"song_{song.id}"
+            )]
+            for song in results
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            f"🔍 *Результаты поиска {search_description}:*",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            f"❌ По запросу {search_description} ничего не найдено.\n"
+            f"Попробуйте изменить параметры поиска."
+        )
+    await show_main_menu(update, context)
+
+async def button_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    await query.answer()
+    song_id = int(query.data.split("_")[1])
+    db = next(get_db())
+    
+    try:
+        song = get_song_by_id(db, song_id)
+        if song:
+            category, place = parse_region(song.region)
+            response = (
+                f"🎵 *Детали песни*\n\n"
+                f"*ID:* {song.id}\n"
+                f"*Название:* {song.title}\n"
+                f"*Категория:* {category}\n"
+                f"*Место записи:* {place}\n\n"
+                f"*Текст:*\n{song.text}\n\n"
+            )
+            
+            # Добавляем кнопки действий для песни
+            keyboard = [
+                [InlineKeyboardButton("✏ Редактировать", callback_data=f"edit_{song.id}")],
+                [InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_{song.id}")],
+                [InlineKeyboardButton("◀ Назад к результатам", callback_data="back_to_results")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                response,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        else:
+            await query.edit_message_text("❌ Песня не найдена")
+    except Exception as e:
+        logger.error(f"Ошибка при получении текста песни: {e}", exc_info=True)
+        await query.edit_message_text("❌ Произошла ошибка. Попробуйте позже.")
+    finally:
+        db.close()
+
+async def handle_callback_query(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data.startswith("edit_"):
+        song_id = int(query.data.split("_")[1])
+        db = next(get_db())
+        try:
+            song = get_song_by_id(db, song_id)
+            if song:
+                context.user_data.update({
+                    'song_id': song_id,
+                    'current_song': {
+                        'id': song.id,
+                        'title': song.title,
+                        'region': song.region,
+                        'text': song.text
+                    },
+                    'state': 'edit_menu'
+                })
+                await show_edit_menu(update, context, {
+                    'id': song.id,
+                    'title': song.title,
+                    'region': song.region,
+                    'text': song.text
+                })
+            else:
+                await query.edit_message_text("❌ Песня не найдена")
+        except Exception as e:
+            logger.error(f"Ошибка при редактировании песни: {e}")
+            await query.edit_message_text("❌ Произошла ошибка")
+        finally:
+            db.close()
+            
+    elif query.data.startswith("delete_"):
+        song_id = int(query.data.split("_")[1])
+        db = next(get_db())
+        try:
+            song = get_song_by_id(db, song_id)
+            if song:
+                context.user_data['song_to_delete'] = {
+                    'id': song_id,
+                    'title': song.title,
+                    'region': song.region
+                }
+                await show_confirm_delete_menu(update, context, {
+                    'id': song_id,
+                    'title': song.title,
+                    'region': song.region
+                })
+            else:
+                await query.edit_message_text("❌ Песня не найдена")
+        except Exception as e:
+            logger.error(f"Ошибка при удалении песни: {e}")
+            await query.edit_message_text("❌ Произошла ошибка")
+        finally:
+            db.close()
+            
+    elif query.data == "back_to_results":
+        await query.delete_message()
+        # Здесь можно реализовать возврат к предыдущим результатам поиска
+        # если сохранять их в context.user_data
+
+def main() -> None:
+    """Start the bot."""
+    application = Application.builder().token(ADMIN_API_TOKEN).build()
+
+    # Регистрация обработчиков команд
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+
+    # Регистрация обработчиков кнопок меню
+    application.add_handler(MessageHandler(filters.Text(["Добавить песню"]), add_song_handler))
+    application.add_handler(MessageHandler(filters.Text(["Поиск по названию"]), search_title_handler))
+    application.add_handler(MessageHandler(filters.Text(["Поиск по тексту"]), search_text_handler))
+    application.add_handler(MessageHandler(filters.Text(["Поиск по месту"]), search_place_handler))
+    application.add_handler(MessageHandler(filters.Text(["Список всех песен"]), list_songs_handler))
+    application.add_handler(MessageHandler(filters.Text(["Редактировать"]), update_song_handler))
+    application.add_handler(MessageHandler(filters.Text(["Удалить"]), delete_song_handler))
+    application.add_handler(MessageHandler(filters.Text(["Помощь"]), help_command))
+    application.add_handler(MessageHandler(filters.Text(["◀ Назад"]), cancel_action))
+    application.add_handler(MessageHandler(filters.Text(["✅ Да, удалить"]), confirm_delete))
+    application.add_handler(MessageHandler(filters.Text(["❌ Нет, отменить"]), cancel_action))
+
+    # Регистрация обработчиков сообщений
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # Регистрация обработчиков callback-запросов
+    application.add_handler(CallbackQueryHandler(handle_callback_query))
+
+    # Запуск бота
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
