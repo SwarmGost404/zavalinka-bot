@@ -114,8 +114,7 @@ def update_song(
     song_id: int,
     title: str = None,
     text: str = None,
-    region: str = None,
-    category: str = None
+    region: str = None
 ):
     try:
         song = db.query(Song).filter(Song.id == song_id).first()
@@ -128,17 +127,17 @@ def update_song(
             song.text = text
         if region is not None:
             song.region = region
-        if category is not None:
-            song.category = category
 
         db.commit()
         db.refresh(song)
-        logger.info(f"Обновлена песня с ID {song_id}")
+        logger.info(f"Успешно обновлена песня с ID {song_id}: title={title is not None}, "
+                   f"text={text is not None}, region={region is not None}")
         return song
+        
     except Exception as e:
         db.rollback()
-        logger.error(f"Ошибка при обновлении песни: {e}")
-        raise
+        logger.error(f"Ошибка при обновлении песни ID {song_id}: {str(e)}")
+        raise  # Можно заменить на return None, если хотите подавить исключение
 
 # Функция для получения всех песен с их ID и другими полями
 def get_all_songs_with_id(db):
