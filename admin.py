@@ -191,15 +191,18 @@ async def cancel_action(update: Update, context: CallbackContext) -> None:
     context.user_data.clear()
     await start(update, context)
 
-async def show_song_details(update: Update, song, edit_mode=False):
+async def show_song_details(update, song, edit_mode=False):
     """Показать детали песни с кнопками действий"""
-    category, place = parse_region(song.region)
+    if '|' in song.region:
+        category, place = song.region.split('|', 1)
+    else:
+        category, place = song.region, "не указано"
+    
     response_text = f"ID: {song.id}\n\n"
     response_text += f"Название: {song.title}\n\n"
     response_text += f"Категория: {category}\n\n"
-    if place and place != "не указано":
-        response_text += f"Место записи: {place}\n\n"
-    response_text += f"Текст:\n{song.text}\n\n"
+    response_text += f"Место записи: {place}\n\n"
+    response_text += f"Текст:\n{song.text[:200]}..." if len(song.text) > 200 else f"Текст:\n{song.text}"
     
     if edit_mode:
         keyboard = [
@@ -217,16 +220,10 @@ async def show_song_details(update: Update, song, edit_mode=False):
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    if isinstance(update, Update):
-        await update.message.reply_text(
-            response_text,
-            reply_markup=reply_markup
-        )
-    else:  # CallbackQuery
-        await update.edit_message_text(
-            response_text,
-            reply_markup=reply_markup
-        )
+    if isinstance(update, Update):  # Если пришло сообщение
+        await update.message.reply_text(response_text, reply_markup=reply_markup)
+    else:  # Если пришел callback query
+        await update.edit_message_text(response_text, reply_markup=reply_markup)
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
     user_input = update.message.text
@@ -311,7 +308,6 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                     'region': song.region
                 }
                 
-                # Создаем инлайн-клавиатуру для подтверждения удаления
                 keyboard = [
                     [InlineKeyboardButton("Да, удалить", callback_data="confirm_delete")],
                     [InlineKeyboardButton("Нет, отменить", callback_data="cancel_delete")]
@@ -330,7 +326,6 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                 await update.message.reply_text("ID должен быть числом")
                 context.user_data.clear()
 
-        # Обработчики редактирования
         elif user_state == 'editing_title':
             if 'song_id' not in context.user_data:
                 await update.message.reply_text("Ошибка: не найден ID песни")
@@ -343,11 +338,9 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                 update_song(db, song_id, title=user_input)
                 await update.message.reply_text(f"Название песни успешно изменено на: {user_input}")
                 
-                # Обновляем данные в context.user_data
                 if 'current_song' in context.user_data:
                     context.user_data['current_song']['title'] = user_input
                     
-                # Показываем обновленную информацию о песне
                 song = get_song_by_id(db, song_id)
                 await show_song_details(update, song, edit_mode=True)
                 
@@ -363,17 +356,25 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                 context.user_data.clear()
                 return
                 
+            if '|' not in user_input or not user_input.split('|')[0].strip():
+                await update.message.reply_text(
+                    "Неверный формат. Введите как: Категория|Место\n\n"
+                    "Примеры:\n"
+                    "Русские народные|Деревня Петровка\n"
+                    "Казачьи|Станица Вешенская\n"
+                    "Современные|Город Москва"
+                )
+                return
+                
             song_id = context.user_data['song_id']
             db = next(get_db())
             try:
                 update_song(db, song_id, region=user_input)
-                await update.message.reply_text(f"Регион и место успешно изменены на: {user_input}")
+                await update.message.reply_text("Регион и место успешно обновлены!")
                 
-                # Обновляем данные в context.user_data
                 if 'current_song' in context.user_data:
                     context.user_data['current_song']['region'] = user_input
                     
-                # Показываем обновленную информацию о песне
                 song = get_song_by_id(db, song_id)
                 await show_song_details(update, song, edit_mode=True)
                 
@@ -382,6 +383,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                 await update.message.reply_text("Произошла ошибка при обновлении")
             finally:
                 db.close()
+                context.user_data['state'] = 'edit_menu'
                 
         elif user_state == 'editing_text':
             if 'song_id' not in context.user_data:
@@ -395,11 +397,9 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                 update_song(db, song_id, text=user_input)
                 await update.message.reply_text("Текст песни успешно обновлен")
                 
-                # Обновляем данные в context.user_data
                 if 'current_song' in context.user_data:
                     context.user_data['current_song']['text'] = user_input
                     
-                # Показываем обновленную информацию о песне
                 song = get_song_by_id(db, song_id)
                 await show_song_details(update, song, edit_mode=True)
                 
@@ -543,7 +543,16 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
                 
         elif query.data in ["edit_title", "edit_region", "edit_text"]:
             context.user_data['state'] = f'editing_{query.data.split("_")[1]}'
-            await query.edit_message_text(f"Введите новый {query.data.split('_')[1]} песни:")
+            if query.data == "edit_region":
+                await query.edit_message_text(
+                    "Введите регион и место в формате: Категория|Место\n\n"
+                    "Примеры:\n"
+                    "Русские народные|Деревня Петровка\n"
+                    "Казачьи|Станица Вешенская\n"
+                    "Современные|Город Москва"
+                )
+            else:
+                await query.edit_message_text(f"Введите новый {query.data.split('_')[1]} песни:")
             
         elif query.data == "confirm_delete":
             if 'song_to_delete' not in context.user_data:
