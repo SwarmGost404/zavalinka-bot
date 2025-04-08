@@ -461,6 +461,7 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     await query.answer()
     
+    db = None  # Initialize db outside try block
     try:
         if query.data.startswith("song_"):
             try:
@@ -476,8 +477,6 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
             except Exception as e:
                 logger.error(f"Ошибка при получении песни: {e}")
                 await query.edit_message_text("Произошла ошибка. Попробуйте позже.")
-            finally:
-                db.close()
                 
         elif query.data.startswith("edit_"):
             try:
@@ -502,8 +501,6 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
             except Exception as e:
                 logger.error(f"Ошибка при редактировании песни: {e}")
                 await query.edit_message_text("Произошла ошибка")
-            finally:
-                db.close()
                 
         elif query.data.startswith("delete_"):
             try:
@@ -538,8 +535,6 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
             except Exception as e:
                 logger.error(f"Ошибка при удалении песни: {e}")
                 await query.edit_message_text("Произошла ошибка")
-            finally:
-                db.close()
                 
         elif query.data in ["edit_title", "edit_region", "edit_text"]:
             context.user_data['state'] = f'editing_{query.data.split("_")[1]}'
@@ -559,8 +554,8 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
                 await query.edit_message_text("Нет данных для удаления")
                 return
             
-            db = next(get_db())
             try:
+                db = next(get_db())
                 song_id = context.user_data['song_to_delete']['id']
                 delete_song(db, song_id)
                 await query.edit_message_text(
@@ -572,8 +567,6 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
             except Exception as e:
                 logger.error(f"Ошибка при удалении песни: {e}")
                 await query.edit_message_text("Произошла ошибка при удалении")
-            finally:
-                db.close()
                 
         elif query.data in ["cancel_edit", "cancel_delete", "back"]:
             await query.delete_message()
@@ -586,6 +579,10 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         logger.error(f"Необработанная ошибка в button_callback: {e}")
         await query.edit_message_text("Произошла непредвиденная ошибка")
+        
+    finally:
+        if db is not None:
+            db.close()
 
 def main() -> None:
     """Start the bot."""
