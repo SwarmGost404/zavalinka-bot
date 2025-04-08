@@ -20,14 +20,14 @@ init_db()
 async def start(update: Update, context: CallbackContext) -> None:
     """Handler for /start command"""
     await update.message.reply_text(
-        "🎵 Менеджер народных песен\n\n"
-        "Доступные команды:\n"
+        "📖 Помощь по командам:\n\n"
         "/add - Добавить новую песню\n"
-        "/list - Показать все песни\n"
+        "/list - Показать все песни с ID\n"
+        "/edit - Редактировать песню\n"
+        "/delete - Удалить песню\n"
         "/search_title - Поиск по названию\n"
         "/search_text - Поиск по тексту\n"
-        "/search_region - Поиск по региону\n"
-        "/help - Помощь"
+        "/search_region - Поиск по региону"
     )
 
 async def help_command(update: Update, context: CallbackContext) -> None:
@@ -49,22 +49,30 @@ async def add_song_handler(update: Update, context: CallbackContext) -> None:
     context.user_data['state'] = 'awaiting_title'
 
 async def list_songs_handler(update: Update, context: CallbackContext) -> None:
-    """Handler for listing all songs with IDs"""
+    """List all songs with inline buttons"""
     db = next(get_db())
     try:
-        songs = get_all_songs(db)
-        if not songs:
-            await update.message.reply_text("В базе пока нет песен.")
-            return
-
-        message = "📋 Список всех песен:\n\n"
-        for song in songs:
-            message += f"ID: {song.id}\nНазвание: {song.title}\nРегион: {song.region}\n\n"
-        
-        await update.message.reply_text(message)
+        results = get_all_songs(db)
+        if results:
+            keyboard = []
+            for song in results:
+                category, place = parse_region(song.region)
+                button_text = f"{song.title}"
+                if place:
+                    button_text += f" ({place})"
+                
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=f"song_{song.id}")])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(
+                "🔍 Все песни в архиве:",
+                reply_markup=reply_markup
+            )
+        else:
+            await update.message.reply_text("❌ В архиве пока нет песен.")
     except Exception as e:
-        logger.error(f"Error listing songs: {e}")
-        await update.message.reply_text("Ошибка при получении списка песен")
+        logger.error(f"Ошибка при получении списка песен: {e}")
+        await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
     finally:
         db.close()
 
