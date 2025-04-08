@@ -1,273 +1,192 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, CallbackQueryHandler
+from sqlalchemy import create_engine, Column, Integer, String, Text
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import sessionmaker
 import logging
-from database import (
-    init_db, get_db, add_song, get_all_songs, get_song_by_id,
-    delete_song, update_song, search_by_title, search_by_text, get_songs_by_region
-)
-from env import ADMIN_API_TOKEN
+from env import DATABASE_URL  # Убедитесь, что DATABASE_URL указан в .env
 
-# Initialize logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize database
-init_db()
+# Создаем движок SQLAlchemy для PostgreSQL
+engine = create_engine(DATABASE_URL)
 
-async def start(update: Update, context: CallbackContext) -> None:
-    """Handler for /start command"""
-    await update.message.reply_text(
-        "🎵 Менеджер народных песен\n\n"
-        "Доступные команды:\n"
-        "/add - Добавить новую песню\n"
-        "/list - Показать все песни\n"
-        "/search_title - Поиск по названию\n"
-        "/search_text - Поиск по тексту\n"
-        "/search_region - Поиск по региону\n"
-        "/help - Помощь"
-    )
+# Проверяем подключение к базе данных
+try:
+    connection = engine.connect()
+    logger.info("Подключение к базе данных успешно установлено!")
+    connection.close()
+except Exception as e:
+    logger.error(f"Ошибка подключения к базе данных: {e}")
+    raise  # Прерываем выполнение, если подключение не удалось
 
-async def help_command(update: Update, context: CallbackContext) -> None:
-    """Handler for /help command"""
-    await update.message.reply_text(
-        "📖 Помощь по командам:\n\n"
-        "/add - Добавить новую песню\n"
-        "/list - Показать все песни с ID\n"
-        "/edit - Редактировать песню\n"
-        "/delete - Удалить песню\n"
-        "/search_title - Поиск по названию\n"
-        "/search_text - Поиск по тексту\n"
-        "/search_region - Поиск по региону"
-    )
+# Создаем базовый класс для моделей
+Base = declarative_base()
 
-async def add_song_handler(update: Update, context: CallbackContext) -> None:
-    """Handler for adding new song"""
-    await update.message.reply_text("Введите название песни:")
-    context.user_data['state'] = 'awaiting_title'
+# Создаем сессию для работы с базой данных
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-async def list_songs_handler(update: Update, context: CallbackContext) -> None:
-    """Handler for listing all songs with IDs"""
-    db = next(get_db())
+class Song(Base):
+    __tablename__ = "folk_songs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    text = Column(Text)  # Текст песни (опционально)
+    region = Column(String, nullable=False)
+    category = Column(String)  # Новый столбец для категории
+
+
+# Создаем таблицы в базе данных (если их нет)
+def init_db():
     try:
-        songs = get_all_songs(db)
-        if not songs:
-            await update.message.reply_text("В базе пока нет песен.")
-            return
-
-        message = "📋 Список всех песен:\n\n"
-        for song in songs:
-            message += f"ID: {song.id}\nНазвание: {song.title}\nРегион: {song.region}\n\n"
-        
-        await update.message.reply_text(message)
+        Base.metadata.create_all(bind=engine)
+        logger.info("Таблицы созданы (если их не было)")
     except Exception as e:
-        logger.error(f"Error listing songs: {e}")
-        await update.message.reply_text("Ошибка при получении списка песен")
+        logger.error(f"Ошибка при создании таблиц: {e}")
+        raise  # Прерываем выполнение, если таблицы не созданы
+
+# Функция для получения сессии
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
     finally:
         db.close()
 
-async def delete_song_handler(update: Update, context: CallbackContext) -> None:
-    """Handler for deleting song by ID"""
-    await update.message.reply_text("Введите ID песни для удаления:")
-    context.user_data['state'] = 'awaiting_song_id_for_delete'
-
-async def edit_song_handler(update: Update, context: CallbackContext) -> None:
-    """Handler for editing song"""
-    await update.message.reply_text("Введите ID песни для редактирования:")
-    context.user_data['state'] = 'awaiting_song_id_for_edit'
-
-async def search_title_handler(update: Update, context: CallbackContext) -> None:
-    """Handler for searching by title"""
-    await update.message.reply_text("Введите название для поиска:")
-    context.user_data['state'] = 'search_title'
-
-async def search_text_handler(update: Update, context: CallbackContext) -> None:
-    """Handler for searching by text"""
-    await update.message.reply_text("Введите текст для поиска:")
-    context.user_data['state'] = 'search_text'
-
-async def search_region_handler(update: Update, context: CallbackContext) -> None:
-    """Handler for searching by region"""
-    await update.message.reply_text("Введите регион для поиска:")
-    context.user_data['state'] = 'search_region'
-
-async def handle_message(update: Update, context: CallbackContext) -> None:
-    """Main message handler"""
-    user_input = update.message.text
-    user_state = context.user_data.get('state')
-
-    if not user_state:
-        await update.message.reply_text("Используйте команды для работы с ботом")
-        return
-
+# Функция для добавления песни
+def add_song(db, title: str, region: str, text: str = None):
     try:
-        if user_state == 'awaiting_title':
-            context.user_data['title'] = user_input
-            await update.message.reply_text("Введите регион происхождения:")
-            context.user_data['state'] = 'awaiting_region'
+        # Проверяем, что title и region не пустые
+        if not title or not region:
+            raise ValueError("Название и область не могут быть пустыми")
 
-        elif user_state == 'awaiting_region':
-            context.user_data['region'] = user_input
-            await update.message.reply_text("Введите текст песни:")
-            context.user_data['state'] = 'awaiting_text'
-
-        elif user_state == 'awaiting_text':
-            db = next(get_db())
-            try:
-                song = add_song(
-                    db,
-                    title=context.user_data['title'],
-                    region=context.user_data['region'],
-                    text=user_input
-                )
-                await update.message.reply_text(
-                    f"✅ Песня добавлена!\nID: {song.id}\n"
-                    f"Название: {song.title}\nРегион: {song.region}"
-                )
-            except Exception as e:
-                await update.message.reply_text(f"Ошибка: {str(e)}")
-            finally:
-                db.close()
-                context.user_data.clear()
-
-        elif user_state == 'awaiting_song_id_for_delete':
-            try:
-                song_id = int(user_input)
-                db = next(get_db())
-                if delete_song(db, song_id):
-                    await update.message.reply_text(f"✅ Песня с ID {song_id} удалена")
-                else:
-                    await update.message.reply_text(f"❌ Песня с ID {song_id} не найдена")
-            except ValueError:
-                await update.message.reply_text("ID должен быть числом")
-            except Exception as e:
-                await update.message.reply_text(f"Ошибка: {str(e)}")
-            finally:
-                db.close()
-                context.user_data.clear()
-
-        elif user_state == 'awaiting_song_id_for_edit':
-            try:
-                song_id = int(user_input)
-                db = next(get_db())
-                song = get_song_by_id(db, song_id)
-                if song:
-                    context.user_data['song_id'] = song_id
-                    keyboard = [
-                        [InlineKeyboardButton("Название", callback_data="edit_title")],
-                        [InlineKeyboardButton("Регион", callback_data="edit_region")],
-                        [InlineKeyboardButton("Текст", callback_data="edit_text")],
-                        [InlineKeyboardButton("Отмена", callback_data="cancel_edit")]
-                    ]
-                    await update.message.reply_text(
-                        f"Редактирование песни ID: {song_id}\n"
-                        f"Выберите что изменить:",
-                        reply_markup=InlineKeyboardMarkup(keyboard))
-                else:
-                    await update.message.reply_text(f"❌ Песня с ID {song_id} не найдена")
-            except ValueError:
-                await update.message.reply_text("ID должен быть числом")
-            except Exception as e:
-                await update.message.reply_text(f"Ошибка: {str(e)}")
-            finally:
-                db.close()
-
-        elif user_state == 'search_title':
-            db = next(get_db())
-            try:
-                songs = search_by_title(db, user_input)
-                await display_search_results(update, songs, "по названию")
-            except Exception as e:
-                await update.message.reply_text(f"Ошибка поиска: {str(e)}")
-            finally:
-                db.close()
-                context.user_data.clear()
-
-        elif user_state == 'search_text':
-            db = next(get_db())
-            try:
-                songs = search_by_text(db, user_input)
-                await display_search_results(update, songs, "по тексту")
-            except Exception as e:
-                await update.message.reply_text(f"Ошибка поиска: {str(e)}")
-            finally:
-                db.close()
-                context.user_data.clear()
-
-        elif user_state == 'search_region':
-            db = next(get_db())
-            try:
-                songs = get_songs_by_region(db, user_input)
-                await display_search_results(update, songs, "по региону")
-            except Exception as e:
-                await update.message.reply_text(f"Ошибка поиска: {str(e)}")
-            finally:
-                db.close()
-                context.user_data.clear()
-
+        # Создаем объект песни
+        song = Song(title=title, text=text, region=region)
+        db.add(song)
+        db.commit()
+        db.refresh(song)
+        logger.info(f"Добавлена песня: {song.title}")
+        return song
     except Exception as e:
-        logger.error(f"Error in handle_message: {e}")
-        await update.message.reply_text("Произошла ошибка")
-        context.user_data.clear()
+        db.rollback()  # Откатываем транзакцию в случае ошибки
+        logger.error(f"Ошибка при добавлении песни: {e}")
+        raise  # Пробрасываем исключение дальше
 
-async def display_search_results(update: Update, songs, search_type):
-    """Display search results"""
-    if not songs:
-        await update.message.reply_text(f"По запросу {search_type} ничего не найдено")
-        return
-    
-    message = f"🔍 Результаты поиска {search_type}:\n\n"
-    for song in songs:
-        message += f"ID: {song.id}\nНазвание: {song.title}\nРегион: {song.region}\n\n"
-    
-    await update.message.reply_text(message)
-
-async def button_callback(update: Update, context: CallbackContext) -> None:
-    """Handler for inline buttons"""
-    query = update.callback_query
-    await query.answer()
-
+# Функция для получения всех песен
+def get_all_songs(db):
     try:
-        if query.data.startswith("edit_"):
-            field = query.data.split("_")[1]
-            context.user_data['edit_field'] = field
-            context.user_data['state'] = f'editing_{field}'
-            await query.edit_message_text(f"Введите новое значение для {field}:")
+        return db.query(Song).all()
+    except Exception as e:
+        logger.error(f"Ошибка при получении списка песен: {e}")
+        raise
+
+# Функция для поиска песен по области
+def get_songs_by_region(db, region: str):
+    try:
+        return db.query(Song).filter(Song.region.ilike(f"%{region}%")).all()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске песен по области: {e}")
+        raise
+
+# Функция для удаления песни по ID
+def delete_song(db, song_id: int):
+    try:
+        # Логируем попытку удаления
+        logger.info(f"Попытка удалить песню с ID: {song_id}")
         
-        elif query.data == "cancel_edit":
-            await query.edit_message_text("Редактирование отменено")
-            context.user_data.clear()
-    
+        song = db.query(Song).filter(Song.id == song_id).first()
+        if not song:
+            logger.warning(f"Песня с ID {song_id} не найдена")
+            raise ValueError(f"Песня с ID {song_id} не найдена")
+
+        db.delete(song)
+        db.commit()
+        logger.info(f"Удалена песня с ID {song_id}: {song.title}")
+        return True
     except Exception as e:
-        logger.error(f"Error in button_callback: {e}")
-        await query.edit_message_text("Произошла ошибка")
-        context.user_data.clear()
+        db.rollback()
+        logger.error(f"Ошибка при удалении песни с ID {song_id}: {e}", exc_info=True)
+        raise
 
-def main() -> None:
-    """Start the bot."""
-    application = Application.builder().token(ADMIN_API_TOKEN).build()
+# Функция для обновления информации о песне
+def update_song(
+    db,
+    song_id: int,
+    title: str = None,
+    text: str = None,
+    region: str = None
+):
+    try:
+        song = db.query(Song).filter(Song.id == song_id).first()
+        if not song:
+            raise ValueError(f"Песня с ID {song_id} не найдена")
 
-    # Register command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("add", add_song_handler))
-    application.add_handler(CommandHandler("list", list_songs_handler))
-    application.add_handler(CommandHandler("delete", delete_song_handler))
-    application.add_handler(CommandHandler("edit", edit_song_handler))
-    application.add_handler(CommandHandler("search_title", search_title_handler))
-    application.add_handler(CommandHandler("search_text", search_text_handler))
-    application.add_handler(CommandHandler("search_region", search_region_handler))
+        if title is not None:
+            song.title = title
+        if text is not None:
+            song.text = text
+        if region is not None:
+            song.region = region
 
-    # Register message handler
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        db.commit()
+        db.refresh(song)
+        logger.info(f"Успешно обновлена песня с ID {song_id}: title={title is not None}, "
+                   f"text={text is not None}, region={region is not None}")
+        return song
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Ошибка при обновлении песни ID {song_id}: {str(e)}")
+        raise  # Можно заменить на return None, если хотите подавить исключение
 
-    # Register callback handler
-    application.add_handler(CallbackQueryHandler(button_callback))
+# Функция для получения всех песен с их ID и другими полями
+def get_all_songs_with_id(db):
+    try:
+        # Query all songs and return them with all fields including id
+        songs = db.query(Song.id, Song.title, Song.text, Song.region, Song.category).all()
+        
+        # Convert the result to a list of dictionaries for easier handling
+        songs_list = [
+            {
+                "id": song.id,
+                "title": song.title,
+                "text": song.text,
+                "region": song.region,
+                "category": song.category
+            }
+            for song in songs
+        ]
+        
+        return songs_list
+    except Exception as e:
+        logger.error(f"Ошибка при получении списка песен с ID: {e}")
+        raise
 
-    # Run the bot
-    application.run_polling()
 
-if __name__ == '__main__':
-    main()
+# Функция для поиска песни по названию
+def search_by_title(db, title: str):
+    try:
+        return db.query(Song).filter(Song.title.ilike(f"%{title}%")).all()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске песни по названию: {e}")
+        raise
+
+# Функция для поиска песни по тексту
+def search_by_text(db, text: str):
+    try:
+        return db.query(Song).filter(Song.text.ilike(f"%{text}%")).all()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске песни по тексту: {e}")
+        raise
+
+# Функция для поиска песни по ID
+def get_song_by_id(db, song_id: int):
+    try:
+        return db.query(Song).filter(Song.id == song_id).first()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске песни по ID: {e}")
+        raise
+
+# Инициализация базы данных
+if __name__ == "__main__":
+    init_db()
