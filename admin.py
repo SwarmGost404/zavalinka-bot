@@ -191,6 +191,43 @@ async def cancel_action(update: Update, context: CallbackContext) -> None:
     context.user_data.clear()
     await start(update, context)
 
+async def show_song_details(update: Update, song, edit_mode=False):
+    """Показать детали песни с кнопками действий"""
+    category, place = parse_region(song.region)
+    response_text = f"ID: {song.id}\n\n"
+    response_text += f"Название: {song.title}\n\n"
+    response_text += f"Категория: {category}\n\n"
+    if place and place != "не указано":
+        response_text += f"Место записи: {place}\n\n"
+    response_text += f"Текст:\n{song.text}\n\n"
+    
+    if edit_mode:
+        keyboard = [
+            [InlineKeyboardButton("Название", callback_data="edit_title")],
+            [InlineKeyboardButton("Регион и место", callback_data="edit_region")],
+            [InlineKeyboardButton("Текст песни", callback_data="edit_text")],
+            [InlineKeyboardButton("Отмена", callback_data="cancel_edit")]
+        ]
+    else:
+        keyboard = [
+            [InlineKeyboardButton("Редактировать", callback_data=f"edit_{song.id}")],
+            [InlineKeyboardButton("Удалить", callback_data=f"delete_{song.id}")],
+            [InlineKeyboardButton("Назад", callback_data="back")]
+        ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if isinstance(update, Update):
+        await update.message.reply_text(
+            response_text,
+            reply_markup=reply_markup
+        )
+    else:  # CallbackQuery
+        await update.edit_message_text(
+            response_text,
+            reply_markup=reply_markup
+        )
+
 async def handle_message(update: Update, context: CallbackContext) -> None:
     user_input = update.message.text
     user_state = context.user_data.get('state')
@@ -252,23 +289,8 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                     'text': song.text
                 }
                 
-                # Создаем инлайн-клавиатуру для выбора поля редактирования
-                keyboard = [
-                    [InlineKeyboardButton("Название", callback_data="edit_title")],
-                    [InlineKeyboardButton("Регион и место", callback_data="edit_region")],
-                    [InlineKeyboardButton("Текст песни", callback_data="edit_text")],
-                    [InlineKeyboardButton("Отмена", callback_data="cancel_edit")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                await show_song_details(update, song, edit_mode=True)
                 
-                await update.message.reply_text(
-                    f"Редактирование песни ID: {song_id}\n"
-                    f"1. Название: {song.title}\n"
-                    f"2. Регион: {song.region}\n"
-                    f"3. Текст: {song.text[:50]}...\n\n"
-                    f"Что вы хотите изменить?",
-                    reply_markup=reply_markup
-                )
             except ValueError:
                 await update.message.reply_text("ID должен быть числом")
                 context.user_data.clear()
@@ -307,6 +329,85 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
             except ValueError:
                 await update.message.reply_text("ID должен быть числом")
                 context.user_data.clear()
+
+        # Обработчики редактирования
+        elif user_state == 'editing_title':
+            if 'song_id' not in context.user_data:
+                await update.message.reply_text("Ошибка: не найден ID песни")
+                context.user_data.clear()
+                return
+                
+            song_id = context.user_data['song_id']
+            db = next(get_db())
+            try:
+                update_song(db, song_id, title=user_input)
+                await update.message.reply_text(f"Название песни успешно изменено на: {user_input}")
+                
+                # Обновляем данные в context.user_data
+                if 'current_song' in context.user_data:
+                    context.user_data['current_song']['title'] = user_input
+                    
+                # Показываем обновленную информацию о песне
+                song = get_song_by_id(db, song_id)
+                await show_song_details(update, song, edit_mode=True)
+                
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении названия: {e}")
+                await update.message.reply_text("Произошла ошибка при обновлении")
+            finally:
+                db.close()
+                
+        elif user_state == 'editing_region':
+            if 'song_id' not in context.user_data:
+                await update.message.reply_text("Ошибка: не найден ID песни")
+                context.user_data.clear()
+                return
+                
+            song_id = context.user_data['song_id']
+            db = next(get_db())
+            try:
+                update_song(db, song_id, region=user_input)
+                await update.message.reply_text(f"Регион и место успешно изменены на: {user_input}")
+                
+                # Обновляем данные в context.user_data
+                if 'current_song' in context.user_data:
+                    context.user_data['current_song']['region'] = user_input
+                    
+                # Показываем обновленную информацию о песне
+                song = get_song_by_id(db, song_id)
+                await show_song_details(update, song, edit_mode=True)
+                
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении региона: {e}")
+                await update.message.reply_text("Произошла ошибка при обновлении")
+            finally:
+                db.close()
+                
+        elif user_state == 'editing_text':
+            if 'song_id' not in context.user_data:
+                await update.message.reply_text("Ошибка: не найден ID песни")
+                context.user_data.clear()
+                return
+                
+            song_id = context.user_data['song_id']
+            db = next(get_db())
+            try:
+                update_song(db, song_id, text=user_input)
+                await update.message.reply_text("Текст песни успешно обновлен")
+                
+                # Обновляем данные в context.user_data
+                if 'current_song' in context.user_data:
+                    context.user_data['current_song']['text'] = user_input
+                    
+                # Показываем обновленную информацию о песне
+                song = get_song_by_id(db, song_id)
+                await show_song_details(update, song, edit_mode=True)
+                
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении текста: {e}")
+                await update.message.reply_text("Произошла ошибка при обновлении")
+            finally:
+                db.close()
 
     except Exception as e:
         logger.error(f"Ошибка при обработке сообщения: {e}")
@@ -366,25 +467,7 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
         try:
             song = get_song_by_id(db, song_id)
             if song:
-                category, place = parse_region(song.region)
-                response_text = f"ID: {song.id}\n\n"
-                response_text += f"Название: {song.title}\n\n"
-                response_text += f"Категория: {category}\n\n"
-                if place and place != "не указано":
-                    response_text += f"Место записи: {place}\n\n"
-                response_text += f"Текст:\n{song.text}\n\n"
-                
-                keyboard = [
-                    [InlineKeyboardButton("Редактировать", callback_data=f"edit_{song.id}")],
-                    [InlineKeyboardButton("Удалить", callback_data=f"delete_{song.id}")],
-                    [InlineKeyboardButton("Назад", callback_data="back")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await query.edit_message_text(
-                    response_text,
-                    reply_markup=reply_markup
-                )
+                await show_song_details(query, song)
             else:
                 await query.edit_message_text("Песня не найдена")
         except Exception as e:
@@ -409,22 +492,7 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
                     'state': 'edit_menu'
                 })
                 
-                keyboard = [
-                    [InlineKeyboardButton("Название", callback_data="edit_title")],
-                    [InlineKeyboardButton("Регион и место", callback_data="edit_region")],
-                    [InlineKeyboardButton("Текст песни", callback_data="edit_text")],
-                    [InlineKeyboardButton("Отмена", callback_data="cancel_edit")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await query.edit_message_text(
-                    f"Редактирование песни ID: {song_id}\n"
-                    f"1. Название: {song.title}\n"
-                    f"2. Регион: {song.region}\n"
-                    f"3. Текст: {song.text[:50]}...\n\n"
-                    f"Что вы хотите изменить?",
-                    reply_markup=reply_markup
-                )
+                await show_song_details(query, song, edit_mode=True)
             else:
                 await query.edit_message_text("Песня не найдена")
         except Exception as e:
