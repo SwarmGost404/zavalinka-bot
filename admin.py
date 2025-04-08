@@ -164,7 +164,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                     await update.message.reply_text(
                         f"Редактирование песни ID: {song_id}\n"
                         f"Выберите что изменить:",
-                        reply_markup=InlineKeyboardMarkup(keyboard)
+                        reply_markup=InlineKeyboardMarkup(keyboard))
                 else:
                     await update.message.reply_text(f"❌ Песня с ID {song_id} не найдена")
             except ValueError:
