@@ -461,116 +461,122 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     await query.answer()
     
-    if query.data.startswith("song_"):
-        song_id = int(query.data.split("_")[1])
-        db = next(get_db())
-        try:
-            song = get_song_by_id(db, song_id)
-            if song:
-                await show_song_details(query, song)
-            else:
-                await query.edit_message_text("Песня не найдена")
-        except Exception as e:
-            logger.error(f"Ошибка при получении текста песни: {e}")
-            await query.edit_message_text("Произошла ошибка. Попробуйте позже.")
-        finally:
-            db.close()
-            
-    elif query.data.startswith("edit_"):
-        song_id = int(query.data.split("_")[1])
-        db = next(get_db())
-        try:
-            song = get_song_by_id(db, song_id)
-            if song:
-                context.user_data.update({
-                    'song_id': song_id,
-                    'current_song': {
+    try:
+        if query.data.startswith("song_"):
+            try:
+                song_id = int(query.data.split("_")[1])
+                db = next(get_db())
+                song = get_song_by_id(db, song_id)
+                if song:
+                    await show_song_details(query, song)
+                else:
+                    await query.edit_message_text("Песня не найдена")
+            except (ValueError, IndexError):
+                await query.edit_message_text("Ошибка: некорректный ID песни")
+            except Exception as e:
+                logger.error(f"Ошибка при получении песни: {e}")
+                await query.edit_message_text("Произошла ошибка. Попробуйте позже.")
+            finally:
+                db.close()
+                
+        elif query.data.startswith("edit_"):
+            try:
+                song_id = int(query.data.split("_")[1])
+                db = next(get_db())
+                song = get_song_by_id(db, song_id)
+                if song:
+                    context.user_data.update({
+                        'song_id': song_id,
+                        'current_song': {
+                            'title': song.title,
+                            'region': song.region,
+                            'text': song.text
+                        },
+                        'state': 'edit_menu'
+                    })
+                    await show_song_details(query, song, edit_mode=True)
+                else:
+                    await query.edit_message_text("Песня не найдена")
+            except (ValueError, IndexError):
+                await query.edit_message_text("Ошибка: некорректный ID песни")
+            except Exception as e:
+                logger.error(f"Ошибка при редактировании песни: {e}")
+                await query.edit_message_text("Произошла ошибка")
+            finally:
+                db.close()
+                
+        elif query.data.startswith("delete_"):
+            try:
+                song_id = int(query.data.split("_")[1])
+                db = next(get_db())
+                song = get_song_by_id(db, song_id)
+                if song:
+                    context.user_data['song_to_delete'] = {
+                        'id': song_id,
                         'title': song.title,
-                        'region': song.region,
-                        'text': song.text
-                    },
-                    'state': 'edit_menu'
-                })
+                        'region': song.region
+                    }
+                    
+                    keyboard = [
+                        [InlineKeyboardButton("Да, удалить", callback_data="confirm_delete")],
+                        [InlineKeyboardButton("Нет, отменить", callback_data="cancel_delete")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.edit_message_text(
+                        f"Подтвердите удаление:\n\n"
+                        f"ID: {song_id}\n"
+                        f"Название: {song.title}\n"
+                        f"Регион: {song.region}\n\n"
+                        f"Вы уверены что хотите удалить эту запись?",
+                        reply_markup=reply_markup
+                    )
+                else:
+                    await query.edit_message_text("Песня не найдена")
+            except (ValueError, IndexError):
+                await query.edit_message_text("Ошибка: некорректный ID песни")
+            except Exception as e:
+                logger.error(f"Ошибка при удалении песни: {e}")
+                await query.edit_message_text("Произошла ошибка")
+            finally:
+                db.close()
                 
-                await show_song_details(query, song, edit_mode=True)
-            else:
-                await query.edit_message_text("Песня не найдена")
-        except Exception as e:
-            logger.error(f"Ошибка при редактировании песни: {e}")
-            await query.edit_message_text("Произошла ошибка")
-        finally:
-            db.close()
+        elif query.data in ["edit_title", "edit_region", "edit_text"]:
+            context.user_data['state'] = f'editing_{query.data.split("_")[1]}'
+            await query.edit_message_text(f"Введите новый {query.data.split('_')[1]} песни:")
             
-    elif query.data.startswith("delete_"):
-        song_id = int(query.data.split("_")[1])
-        db = next(get_db())
-        try:
-            song = get_song_by_id(db, song_id)
-            if song:
-                context.user_data['song_to_delete'] = {
-                    'id': song_id,
-                    'title': song.title,
-                    'region': song.region
-                }
-                
-                keyboard = [
-                    [InlineKeyboardButton("Да, удалить", callback_data="confirm_delete")],
-                    [InlineKeyboardButton("Нет, отменить", callback_data="cancel_delete")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
+        elif query.data == "confirm_delete":
+            if 'song_to_delete' not in context.user_data:
+                await query.edit_message_text("Нет данных для удаления")
+                return
+            
+            db = next(get_db())
+            try:
+                song_id = context.user_data['song_to_delete']['id']
+                delete_song(db, song_id)
                 await query.edit_message_text(
-                    f"Подтвердите удаление:\n\n"
+                    f"Песня успешно удалена!\n"
                     f"ID: {song_id}\n"
-                    f"Название: {song.title}\n"
-                    f"Регион: {song.region}\n\n"
-                    f"Вы уверены что хотите удалить эту запись?",
-                    reply_markup=reply_markup
+                    f"Название: {context.user_data['song_to_delete']['title']}"
                 )
-            else:
-                await query.edit_message_text("Песня не найдена")
-        except Exception as e:
-            logger.error(f"Ошибка при удалении песни: {e}")
-            await query.edit_message_text("Произошла ошибка")
-        finally:
-            db.close()
-            
-    elif query.data == "edit_title":
-        await query.edit_message_text("Введите новое название песни:")
-        context.user_data['state'] = 'editing_title'
-        
-    elif query.data == "edit_region":
-        await query.edit_message_text("Введите новый регион и место (в формате 'Регион|Место'):")
-        context.user_data['state'] = 'editing_region'
-        
-    elif query.data == "edit_text":
-        await query.edit_message_text("Введите новый текст песни:")
-        context.user_data['state'] = 'editing_text'
-        
-    elif query.data == "confirm_delete":
-        if 'song_to_delete' not in context.user_data:
-            await query.edit_message_text("Нет данных для удаления")
-            return
-        
-        db = next(get_db())
-        try:
-            song_id = context.user_data['song_to_delete']['id']
-            delete_song(db, song_id)
-            await query.edit_message_text(
-                f"Песня успешно удалена!\n"
-                f"ID: {song_id}\n"
-                f"Название: {context.user_data['song_to_delete']['title']}"
-            )
+                context.user_data.clear()
+            except Exception as e:
+                logger.error(f"Ошибка при удалении песни: {e}")
+                await query.edit_message_text("Произошла ошибка при удалении")
+            finally:
+                db.close()
+                
+        elif query.data in ["cancel_edit", "cancel_delete", "back"]:
+            await query.delete_message()
             context.user_data.clear()
-        except Exception as e:
-            logger.error(f"Ошибка при удалении песни: {e}")
-            await query.edit_message_text("Произошла ошибка при удалении")
-        finally:
-            db.close()
             
-    elif query.data in ["cancel_edit", "cancel_delete", "back"]:
-        await query.delete_message()
-        context.user_data.clear()
+        else:
+            await query.edit_message_text("Неизвестная команда")
+            logger.warning(f"Неизвестные callback данные: {query.data}")
+            
+    except Exception as e:
+        logger.error(f"Необработанная ошибка в button_callback: {e}")
+        await query.edit_message_text("Произошла непредвиденная ошибка")
 
 def main() -> None:
     """Start the bot."""
