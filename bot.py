@@ -63,7 +63,7 @@ async def setup_commands(application: Application):
 async def start_command(update: Update, context: CallbackContext):
     """Send a welcome message with available commands"""
     help_text = (
-        "🎵 Этнографический архив песен\n\n"
+        "Этнографический архив песен\n\n"
         "Доступные команды:\n\n"
         "/add - Добавить новую песню\n"
         "/search_title - Поиск по названию\n"
@@ -71,14 +71,16 @@ async def start_command(update: Update, context: CallbackContext):
         "/search_place - Поиск по месту записи\n"
         "/search_category - Поиск по категории\n"
         "/all - Список всех песен\n"
-        "/help - Помощь и инструкции"
+        "/help - Помощь и инструкции\n\n"
+        "Вы можете нажать на любую команду, чтобы быстро использовать эту команду\n"
+        "Все команды выделяются синим"
     )
     await update.message.reply_text(help_text)
 
 async def help_command(update: Update, context: CallbackContext) -> None:
     """Send a help message with detailed command info"""
     help_text = (
-        "🎵 Этнографический архив песен\n\n"
+        "Этнографический архив песен\n\n"
         "Связь с создателем: @SwarmGost\n\n"
         "Доступные команды:\n\n"
         "/start - Начать работу с ботом\n"
@@ -88,7 +90,9 @@ async def help_command(update: Update, context: CallbackContext) -> None:
         "/search_place - Поиск песен по месту записи\n"
         "/search_category - Поиск песен по категории\n"
         "/all - Просмотр всего архива\n"
-        "/help - Эта справка"
+        "/help - Эта справка\n\n"
+        "Вы можете нажать на любую команду, чтобы быстро использовать эту команду\n"
+        "Все команды выделяются синим"
     )
     await update.message.reply_text(help_text)
 
@@ -138,7 +142,7 @@ async def list_songs_handler(update: Update, context: CallbackContext) -> None:
                 reply_markup=reply_markup
             )
         else:
-            await update.message.reply_text("❌ В архиве пока нет песен.")
+            await update.message.reply_text("В архиве пока нет песен.")
     except Exception as e:
         logger.error(f"Ошибка при получении списка песен: {e}")
         await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
@@ -216,11 +220,11 @@ async def display_results(update: Update, results, search_description, context: 
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
-            f"🔍 Найдены песни {search_description}:",
+            f"Найдены песни {search_description}:",
             reply_markup=reply_markup
         )
     else:
-        await update.message.reply_text(f"❌ По запросу {search_description} ничего не найдено.")
+        await update.message.reply_text(f"По запросу {search_description} ничего не найдено.")
 
 async def save_song(update: Update, context: CallbackContext) -> None:
     """Save song to database"""
@@ -239,7 +243,7 @@ async def save_song(update: Update, context: CallbackContext) -> None:
         song = add_song(db, title=title, region=full_region, text=text)
         
         response_message = (
-            f'🎵 Песня добавлена!\n\n'
+            f'Песня добавлена!\n\n'
             f'Название: {title}\n'
             f'Категория: {region}\n'
         )
@@ -252,7 +256,7 @@ async def save_song(update: Update, context: CallbackContext) -> None:
         context.user_data.clear()
     except Exception as e:
         logger.error(f"Ошибка при сохранении песни: {e}")
-        await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
+        await update.message.reply_text("Произошла ошибка. Попробуйте позже.")
     finally:
         db.close()
 
@@ -269,7 +273,7 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
             if song:
                 category, place = parse_region(song.region)
                 response_text = (
-                    f"🎵 Детали песни\n\n"
+                    f"Детали песни\n\n"
                     f"Название: {song.title}\n"
                     f"Категория: {category}\n"
                 )
@@ -281,10 +285,10 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
                 
                 await query.edit_message_text(response_text)
             else:
-                await query.edit_message_text("❌ Песня не найдена")
+                await query.edit_message_text("Песня не найдена")
         except Exception as e:
             logger.error(f"Ошибка при получении текста песни: {e}")
-            await query.edit_message_text("❌ Произошла ошибка. Попробуйте позже.")
+            await query.edit_message_text("Произошла ошибка. Попробуйте позже.")
         finally:
             db.close()
 
