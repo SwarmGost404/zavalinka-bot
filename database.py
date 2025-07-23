@@ -1,6 +1,8 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text
+from sqlalchemy import create_engine, Column, Integer, String, Text, LargeBinary
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
+from models import *
+
 import logging
 from env import DATABASE_URL  # Убедитесь, что DATABASE_URL указан в .env
 
@@ -31,9 +33,18 @@ class Song(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    text = Column(Text)  # Текст песни (опционально)
+    text = Column(Text, nullable=False)
     region = Column(String, nullable=False)
-    category = Column(String)  # Новый столбец для категории
+    category = Column(String)
+
+class Audio(Base):
+    __tablename__ = "folk_audio"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    audio = Column(LargeBinary)  # Для хранения бинарных данных аудиофайла
+    region = Column(String, nullable=False)
+    category = Column(String)
 
 
 # Создаем таблицы в базе данных (если их нет)
@@ -54,14 +65,14 @@ def get_db():
         db.close()
 
 # Функция для добавления песни
-def add_song(db, title: str, region: str, text: str = None):
+def add_song(db, NewSong: SongText):
     try:
         # Проверяем, что title и region не пустые
-        if not title or not region:
+        if not NewSong.title or not NewSong.region or not NewSong.text:
             raise ValueError("Название и область не могут быть пустыми")
 
         # Создаем объект песни
-        song = Song(title=title, text=text, region=region)
+        song = Song(title=NewSong.title, text=NewSong.text, region=NewSong.region)
         db.add(song)
         db.commit()
         db.refresh(song)
@@ -72,6 +83,24 @@ def add_song(db, title: str, region: str, text: str = None):
         logger.error(f"Ошибка при добавлении песни: {e}")
         raise  # Пробрасываем исключение дальше
 
+# create audio fucntion
+def create_audio(db, song: SongAudio):
+    try:
+        if not song.title or not song.region or not song.audio:
+            raise ValueError("Название и область не могут быть пустыми")
+        
+        createdSong = Audio(song)
+        db.add(createdSong)
+        db.commit()
+        db.refresh(createdSong)
+        logger.info(f"Добавлена запись: {createdSong.title}")
+        return createdSong
+    except Exception as e:
+        db.rollback()  # Откатываем транзакцию в случае ошибки
+        logger.error(f"Ошибка при добавлении Записи: {e}")
+        raise  # Пробрасываем исключение дальше
+
+
 # Функция для получения всех песен
 def get_all_songs(db):
     try:
@@ -80,12 +109,26 @@ def get_all_songs(db):
         logger.error(f"Ошибка при получении списка песен: {e}")
         raise
 
+def get_all_audio(db):
+    try:
+        return db.query(Audio).all()
+    except Exception as e:
+        logger.error(f"Ошибка при получении списка записей: {e}")
+        raise
+
 # Функция для поиска песен по области
 def get_songs_by_region(db, region: str):
     try:
         return db.query(Song).filter(Song.region.ilike(f"%{region}%")).all()
     except Exception as e:
         logger.error(f"Ошибка при поиске песен по области: {e}")
+        raise
+
+def get_audio_by_region(db, region: str):
+    try:
+        return db.query(Audio).filter(Audio.region.ilike(f"%{region}%")).all()
+    except Exception as e:
+        logger.error(f"Ошибка при поиске записей по области: {e}")
         raise
 
 # Функция для удаления песни по ID
@@ -106,6 +149,25 @@ def delete_song(db, song_id: int):
     except Exception as e:
         db.rollback()
         logger.error(f"Ошибка при удалении песни с ID {song_id}: {e}", exc_info=True)
+        raise
+
+def delete_song(db, song_id: int):
+    try:
+        # Логируем попытку удаления
+        logger.info(f"Попытка удалить запись с ID: {song_id}")
+        
+        song = db.query(Audio).filter(Audio.id == song_id).first()
+        if not song:
+            logger.warning(f"Запись с ID {song_id} не найдена")
+            raise ValueError(f"Запись с ID {song_id} не найдена")
+
+        db.delete(song)
+        db.commit()
+        logger.info(f"Удалена Запись с ID {song_id}: {song.title}")
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Ошибка при удалении записи с ID {song_id}: {e}", exc_info=True)
         raise
 
 # Функция для обновления информации о песне
@@ -186,6 +248,8 @@ def get_song_by_id(db, song_id: int):
     except Exception as e:
         logger.error(f"Ошибка при поиске песни по ID: {e}")
         raise
+
+
 
 # Инициализация базы данных
 if __name__ == "__main__":

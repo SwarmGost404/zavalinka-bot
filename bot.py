@@ -21,18 +21,18 @@ from database import (
     search_by_text, get_song_by_id
 )
 
-# Initialize logging
+# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Initialize database
+# Инициализация базы данных
 init_db()
 
 def parse_region(region_str):
-    """Parse region string into category and place"""
+    """Разбирает строку региона на категорию и место"""
     if not region_str:
         return "", ""
     
@@ -46,7 +46,7 @@ def parse_region(region_str):
     return region_str, ""
 
 async def setup_commands(application: Application):
-    """Set up the bot commands for the menu with CORRECT commands"""
+    """Настраивает команды бота для меню"""
     commands = [
         BotCommand("start", "Начать работу с ботом"),
         BotCommand("add", "Добавить новую песню"),
@@ -61,7 +61,7 @@ async def setup_commands(application: Application):
     await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
 async def start_command(update: Update, context: CallbackContext):
-    """Send a welcome message with available commands"""
+    """Отправляет приветственное сообщение с доступными командами"""
     help_text = (
         "Этнографический архив песен\n\n"
         "Доступные команды:\n\n"
@@ -78,7 +78,7 @@ async def start_command(update: Update, context: CallbackContext):
     await update.message.reply_text(help_text)
 
 async def help_command(update: Update, context: CallbackContext) -> None:
-    """Send a help message with detailed command info"""
+    """Отправляет справочное сообщение с подробной информацией о командах"""
     help_text = (
         "Этнографический архив песен\n\n"
         "Связь с создателем: @SwarmGost\n\n"
@@ -98,32 +98,32 @@ async def help_command(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(help_text)
 
 async def add_song_handler(update: Update, context: CallbackContext) -> None:
-    """Start the song adding process"""
+    """Начинает процесс добавления песни"""
     await update.message.reply_text('Введите название песни:')
     context.user_data['awaiting_input'] = 'awaiting_title'
 
 async def search_title_handler(update: Update, context: CallbackContext) -> None:
-    """Handle title search"""
+    """Обрабатывает поиск по названию"""
     await update.message.reply_text('Введите название песни для поиска:')
     context.user_data['awaiting_input'] = 'search_title'
 
 async def search_text_handler(update: Update, context: CallbackContext) -> None:
-    """Handle text search"""
+    """Обрабатывает поиск по тексту"""
     await update.message.reply_text('Введите текст песни для поиска:')
     context.user_data['awaiting_input'] = 'search_text'
 
 async def search_place_handler(update: Update, context: CallbackContext) -> None:
-    """Handle place search"""
+    """Обрабатывает поиск по месту записи"""
     await update.message.reply_text('Введите место записи для поиска:')
     context.user_data['awaiting_input'] = 'search_place'
 
 async def search_category_handler(update: Update, context: CallbackContext) -> None:
-    """Handle category search"""
+    """Обрабатывает поиск по категории"""
     await update.message.reply_text('Введите категорию для поиска:')
     context.user_data['awaiting_input'] = 'search_category'
 
 async def list_songs_handler(update: Update, context: CallbackContext) -> None:
-    """List all songs with inline buttons"""
+    """Выводит список всех песен с инлайн-кнопками"""
     db = next(get_db())
     try:
         results = get_all_songs(db)
@@ -151,7 +151,7 @@ async def list_songs_handler(update: Update, context: CallbackContext) -> None:
         db.close()
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
-    """Handle all non-command messages based on current state"""
+    """Обрабатывает все некомандные сообщения в зависимости от текущего состояния"""
     if 'awaiting_input' not in context.user_data:
         await update.message.reply_text("Используйте команды для взаимодействия с ботом. /help - для списка команд")
         return
@@ -208,7 +208,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         context.user_data.clear()
 
 async def display_results(update: Update, results, search_description, context: CallbackContext):
-    """Display search results with inline buttons"""
+    """Отображает результаты поиска с инлайн-кнопками"""
     if results:
         keyboard = []
         for song in results:
@@ -228,7 +228,7 @@ async def display_results(update: Update, results, search_description, context: 
         await update.message.reply_text(f"По запросу {search_description} ничего не найдено.")
 
 async def save_song(update: Update, context: CallbackContext) -> None:
-    """Save song to database"""
+    """Сохраняет песню в базу данных"""
     db = next(get_db())
     try:
         title = context.user_data['title']
@@ -262,7 +262,7 @@ async def save_song(update: Update, context: CallbackContext) -> None:
         db.close()
 
 async def button_callback(update: Update, context: CallbackContext) -> None:
-    """Handle inline button callbacks for song details"""
+    """Обрабатывает нажатия инлайн-кнопок для отображения деталей песни"""
     query = update.callback_query
     await query.answer()
     
@@ -294,10 +294,10 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
             db.close()
 
 def main():
-    """Start the bot with all handlers"""
+    """Запускает бота со всеми обработчиками"""
     application = Application.builder().token(API_TOKEN).build()
 
-    # Register command handlers - ALL COMMANDS MATCH THE MENU NOW
+    # Регистрация обработчиков команд
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("add", add_song_handler))
@@ -307,16 +307,16 @@ def main():
     application.add_handler(CommandHandler("search_category", search_category_handler))
     application.add_handler(CommandHandler("all", list_songs_handler))
 
-    # Register message handler
+    # Регистрация обработчика сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Register callback handler
+    # Регистрация обработчика колбэков
     application.add_handler(CallbackQueryHandler(button_callback))
 
-    # Set up commands menu - THIS WILL SHOW THE CORRECT COMMANDS NOW
+    # Настройка меню команд
     application.post_init = setup_commands
 
-    # Run the bot
+    # Запуск бота
     application.run_polling()
 
 if __name__ == '__main__':
