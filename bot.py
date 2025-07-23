@@ -82,6 +82,7 @@ async def help_command(update: Update, context: CallbackContext) -> None:
     help_text = (
         "Этнографический архив песен\n\n"
         "Связь с создателем: @SwarmGost\n\n"
+        "Информация про бота: @zavalinkaChannel \n"
         "Доступные команды:\n\n"
         "/start - Начать работу с ботом\n"
         "/add - Добавить новую песню в архив\n"
