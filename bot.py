@@ -139,7 +139,7 @@ async def list_songs_handler(update: Update, context: CallbackContext) -> None:
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             await update.message.reply_text(
-                "🔍 Все песни в архиве:",
+                "Все песни в архиве:",
                 reply_markup=reply_markup
             )
         else:
