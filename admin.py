@@ -7,14 +7,12 @@ from database import (
 )
 from env import ADMIN_API_TOKEN
 
-# Initialize logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Initialize database
 init_db()
 
 def parse_region(region_str):
@@ -38,16 +36,16 @@ async def show_song_details(update, song, edit_mode=False):
     
     if edit_mode:
         keyboard = [
-            [InlineKeyboardButton("✏️ Название", callback_data="edit_title")],
-            [InlineKeyboardButton("🌍 Регион", callback_data="edit_region")],
-            [InlineKeyboardButton("📝 Текст", callback_data="edit_text")],
-            [InlineKeyboardButton("❌ Отмена", callback_data="cancel_edit")]
+            [InlineKeyboardButton("Название", callback_data="edit_title")],
+            [InlineKeyboardButton("Регион", callback_data="edit_region")],
+            [InlineKeyboardButton("Текст", callback_data="edit_text")],
+            [InlineKeyboardButton("Отмена", callback_data="cancel_edit")]
         ]
     else:
         keyboard = [
-            [InlineKeyboardButton("✏️ Редактировать", callback_data=f"edit_{song.id}")],
-            [InlineKeyboardButton("🗑️ Удалить", callback_data=f"delete_{song.id}")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="back")]
+            [InlineKeyboardButton("Редактировать", callback_data=f"edit_{song.id}")],
+            [InlineKeyboardButton("Удалить", callback_data=f"delete_{song.id}")],
+            [InlineKeyboardButton("Назад", callback_data="back")]
         ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -60,7 +58,7 @@ async def show_song_details(update, song, edit_mode=False):
 async def start(update: Update, context: CallbackContext) -> None:
     """Handler for /start command"""
     await update.message.reply_text(
-        "📖 Помощь по командам:\n\n"
+        "Помощь по командам:\n\n"
         "/add - Добавить новую песню\n"
         "/list - Показать все песни с ID\n"
         "/edit - Редактировать песню\n"
@@ -73,7 +71,7 @@ async def start(update: Update, context: CallbackContext) -> None:
 async def help_command(update: Update, context: CallbackContext) -> None:
     """Handler for /help command"""
     await update.message.reply_text(
-        "📖 Помощь по командам:\n\n"
+        "Помощь по командам:\n\n"
         "/add - Добавить новую песню\n"
         "/list - Показать все песни с ID\n"
         "/edit - Редактировать песню\n"
@@ -106,7 +104,7 @@ async def list_songs_handler(update: Update, context: CallbackContext) -> None:
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"song_{song.id}")])
         
         await update.message.reply_text(
-            "📋 Список всех песен:",
+            "Список всех песен:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
     except Exception as e:
@@ -170,7 +168,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                     text=user_input
                 )
                 await update.message.reply_text(
-                    f"✅ Песня добавлена!\nID: {song.id}\n"
+                    f"Песня добавлена!\nID: {song.id}\n"
                     f"Название: {song.title}\nРегион: {song.region}"
                 )
             except Exception as e:
@@ -184,9 +182,9 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                 song_id = int(user_input)
                 db = next(get_db())
                 if delete_song(db, song_id):
-                    await update.message.reply_text(f"✅ Песня с ID {song_id} удалена")
+                    await update.message.reply_text(f"Песня с ID {song_id} удалена")
                 else:
-                    await update.message.reply_text(f"❌ Песня с ID {song_id} не найдена")
+                    await update.message.reply_text(f"Песня с ID {song_id} не найдена")
             except ValueError:
                 await update.message.reply_text("ID должен быть числом")
             except Exception as e:
@@ -204,7 +202,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                     context.user_data['song_id'] = song_id
                     await show_song_details(update, song, edit_mode=True)
                 else:
-                    await update.message.reply_text(f"❌ Песня с ID {song_id} не найдена")
+                    await update.message.reply_text(f"Песня с ID {song_id} не найдена")
             except ValueError:
                 await update.message.reply_text("ID должен быть числом")
             except Exception as e:
@@ -227,10 +225,10 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
                 updated_song = update_song(db, song_id, **update_data)
                 
                 if updated_song:
-                    await update.message.reply_text(f"✅ {field.capitalize()} успешно обновлен!")
+                    await update.message.reply_text(f"{field.capitalize()} успешно обновлен!")
                     await show_song_details(update, updated_song, edit_mode=True)
                 else:
-                    await update.message.reply_text("❌ Ошибка обновления")
+                    await update.message.reply_text("Ошибка обновления")
             except Exception as e:
                 await update.message.reply_text(f"Ошибка: {str(e)}")
             finally:
@@ -328,18 +326,18 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
                         'title': song.title
                     }
                     keyboard = [
-                        [InlineKeyboardButton("✅ Да, удалить", callback_data="confirm_delete")],
-                        [InlineKeyboardButton("❌ Нет, отменить", callback_data="cancel_delete")]
+                        [InlineKeyboardButton("Да, удалить", callback_data="confirm_delete")],
+                        [InlineKeyboardButton("Нет, отменить", callback_data="cancel_delete")]
                     ]
                     await query.edit_message_text(
-                        f"⚠️ Удалить песню?\nID: {song_id}\nНазвание: {song.title}",
+                        f"Удалить песню?\nID: {song_id}\nНазвание: {song.title}",
                         reply_markup=InlineKeyboardMarkup(keyboard))
             finally:
                 db.close()
 
         elif query.data == "confirm_delete":
             if 'song_to_delete' not in context.user_data:
-                await query.edit_message_text("❌ Нет данных для удаления")
+                await query.edit_message_text("Нет данных для удаления")
                 return
             
             song_id = context.user_data['song_to_delete']['id']
@@ -347,12 +345,12 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
             try:
                 if delete_song(db, song_id):
                     await query.edit_message_text(
-                        f"✅ Песня удалена:\n"
+                        f"Песня удалена:\n"
                         f"ID: {song_id}\n"
                         f"Название: {context.user_data['song_to_delete']['title']}"
                     )
                 else:
-                    await query.edit_message_text("❌ Ошибка при удалении")
+                    await query.edit_message_text("Ошибка при удалении")
             finally:
                 db.close()
                 context.user_data.clear()
@@ -362,10 +360,10 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
             context.user_data.clear()
 
     except ValueError:
-        await query.edit_message_text("❌ Некорректный ID песни")
+        await query.edit_message_text("Некорректный ID песни")
     except Exception as e:
         logger.error(f"Error in button_callback: {e}")
-        await query.edit_message_text("⚠️ Произошла ошибка")
+        await query.edit_message_text("Произошла ошибка")
         context.user_data.clear()
 
 def main() -> None:

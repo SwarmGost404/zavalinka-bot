@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import List, Dict
-from database import get_db, Song  # Импортируем ваши функции из db.py
+from database import get_db, Song
 
 def export_songs_to_json(filename: str = None) -> str:
     """

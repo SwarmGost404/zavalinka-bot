@@ -21,14 +21,12 @@ from database import (
     search_by_text, get_song_by_id
 )
 
-# Initialize logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Initialize database
 init_db()
 
 def parse_region(region_str):
@@ -73,7 +71,8 @@ async def start_command(update: Update, context: CallbackContext):
         "/all - Список всех песен\n"
         "/help - Помощь и инструкции\n\n"
         "Вы можете нажать на любую команду, чтобы быстро использовать эту команду\n"
-        "Все команды выделяются синим"
+        "Все команды выделяются синим\n"
+        "!!!Если у вас не работает бот, сразу пишите мне swarmgost Пользователей не так много, и я могу просто не заметить что бот не работает!!!"
     )
     await update.message.reply_text(help_text)
 
@@ -296,8 +295,6 @@ async def button_callback(update: Update, context: CallbackContext) -> None:
 def main():
     """Start the bot with all handlers"""
     application = Application.builder().token(API_TOKEN).build()
-
-    # Register command handlers - ALL COMMANDS MATCH THE MENU NOW
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("add", add_song_handler))
@@ -306,17 +303,9 @@ def main():
     application.add_handler(CommandHandler("search_place", search_place_handler))
     application.add_handler(CommandHandler("search_category", search_category_handler))
     application.add_handler(CommandHandler("all", list_songs_handler))
-
-    # Register message handler
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Register callback handler
     application.add_handler(CallbackQueryHandler(button_callback))
-
-    # Set up commands menu - THIS WILL SHOW THE CORRECT COMMANDS NOW
     application.post_init = setup_commands
-
-    # Run the bot
     application.run_polling()
 
 if __name__ == '__main__':
