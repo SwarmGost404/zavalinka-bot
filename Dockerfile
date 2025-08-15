@@ -2,12 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-COPY bot.py .
-COPY database.py .
-COPY env.py .
+COPY . .
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
-
-CMD ["python", "bot.py"]
+CMD ["python3", "bot.py"]
