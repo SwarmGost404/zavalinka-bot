@@ -10,4 +10,4 @@ COPY env.py .
 RUN pip install --no-cache-dir -r requirements.txt
 
 
-CMD ["./start.sh"]
+CMD ["python", "bot.py"]
